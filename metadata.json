@@ -1,0 +1,6 @@
+{
+  "name": "WAEC Master",
+  "description": "A premium gamified WAEC CBT prep platform featuring realistic simulations, weekly leaderboards, real-time multiplayer battles, and an advanced AI tutor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
