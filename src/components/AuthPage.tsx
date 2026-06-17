@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock, User, ShieldCheck, Sparkles, BookOpen, Brain, ArrowLeft } from 'lucide-react';
+import { saveUserToFirestore } from '../utils/firebaseSync';
 
 interface AuthPageProps {
   initialMode: 'login' | 'signup';
@@ -244,12 +245,25 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
         const updatedUsers = [...currentUsers, newUser];
         localStorage.setItem('waec_registered_users', JSON.stringify(updatedUsers));
 
-        setLoading(false);
-        onAuthSuccess({
-          username: newUser.username,
-          email: newUser.email,
-          avatar: newUser.avatar
-        });
+        // Push new user to Cloud Firestore concurrently
+        saveUserToFirestore(newUser)
+          .then(() => {
+            setLoading(false);
+            onAuthSuccess({
+              username: newUser.username,
+              email: newUser.email,
+              avatar: newUser.avatar
+            });
+          })
+          .catch((err) => {
+            console.error('Firestore signup save failed:', err);
+            setLoading(false);
+            onAuthSuccess({
+              username: newUser.username,
+              email: newUser.email,
+              avatar: newUser.avatar
+            });
+          });
       }, 800);
     } else if (mode === 'forgot') {
       if (!email) {

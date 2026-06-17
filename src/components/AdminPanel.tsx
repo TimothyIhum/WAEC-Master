@@ -6,6 +6,7 @@ import {
 import { Question, Announcement } from '../types';
 import { SUBJECTS_LIST } from '../data/questions';
 import OcrExtractorTab from './OcrExtractorTab';
+import { saveUserToFirestore } from '../utils/firebaseSync';
 
 interface AdminPanelProps {
   questionsList: Question[];
@@ -170,6 +171,11 @@ export default function AdminPanel({
   // Track edits to candidates to persist dynamically
   React.useEffect(() => {
     localStorage.setItem('waec_registered_users', JSON.stringify(candidates));
+    candidates.forEach(cand => {
+      if (cand && cand.email) {
+        saveUserToFirestore(cand).catch(e => console.error("Firestore candidate sync failed:", e));
+      }
+    });
   }, [candidates]);
 
   const handleAddQuestionLocal = (e: React.FormEvent) => {

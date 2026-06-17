@@ -8,9 +8,10 @@ import { DiscussionPost } from '../types';
 interface CommunityViewProps {
   currentUsername: string;
   avatar: string;
+  currentUserEmail?: string;
 }
 
-export default function CommunityView({ currentUsername, avatar }: CommunityViewProps) {
+export default function CommunityView({ currentUsername, avatar, currentUserEmail }: CommunityViewProps) {
   const [posts, setPosts] = useState<DiscussionPost[]>([]);
   const [loading, setLoading] = useState(false);
   const [newPostContent, setNewPostContent] = useState('');
@@ -52,7 +53,8 @@ export default function CommunityView({ currentUsername, avatar }: CommunityView
           author: currentUsername,
           avatar,
           content: newPostContent,
-          subject: selectedSubject
+          subject: selectedSubject,
+          author_email: currentUserEmail || `${currentUsername.toLowerCase().trim()}@waecmaster.edu.ng`
         })
       });
 

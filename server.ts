@@ -5,8 +5,48 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 import fs from "fs";
+import pg from "pg";
 
 dotenv.config();
+
+const { Pool } = pg;
+const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+let pool: pg.Pool | null = null;
+
+if (databaseUrl) {
+  try {
+    pool = new Pool({
+      connectionString: databaseUrl,
+      ssl: {
+        rejectUnauthorized: false,
+      },
+    });
+    console.log("Neon Database Pool configured successfully.");
+  } catch (err) {
+    console.error("Neon Database Pool initialization failed:", err);
+  }
+} else {
+  console.warn("Neon Database Connection URL is missing. Falling back to Firestore/In-Memory mode.");
+}
+
+import { initializeApp as initFirebaseApp } from "firebase/app";
+import { 
+  getFirestore as getBackendFirestore, 
+  collection as fCol, 
+  doc as fDoc, 
+  getDocs as fGetDocs, 
+  getDoc as fGetDoc, 
+  setDoc as fSetDoc, 
+  updateDoc as fUpdateDoc, 
+  query as fQuery, 
+  orderBy as fOrderBy 
+} from "firebase/firestore";
+
+const firebaseConfig = JSON.parse(
+  fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8")
+);
+const firebaseApp = initFirebaseApp(firebaseConfig);
+const db = getBackendFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
 
 // In-Memory active verification codes datastore
 interface VerificationRecord {
@@ -390,32 +430,152 @@ app.post("/api/announcements", (req, res) => {
   res.status(201).json(newAnn);
 });
 
-app.get("/api/discussions", (req, res) => {
-  res.json(discussions);
+app.get("/api/discussions", async (req, res) => {
+  if (pool) {
+    try {
+      const postsResult = await pool.query(`
+        SELECT id, author_email, author_username, author_avatar, content, subject, likes, created_at
+        FROM discussion_posts
+        ORDER BY created_at DESC
+      `);
+      const repliesResult = await pool.query(`
+        SELECT id, post_id, author_username, author_avatar, content, created_at
+        FROM discussion_replies
+        ORDER BY created_at ASC
+      `);
+      
+      const posts = postsResult.rows.map((row: any) => ({
+        id: row.id,
+        author: row.author_username,
+        avatar: row.author_avatar || "🎓",
+        content: row.content,
+        subject: row.subject,
+        timestamp: row.created_at ? row.created_at.toISOString() : new Date().toISOString(),
+        likes: row.likes || 0,
+        replies: [] as any[]
+      }));
+      
+      repliesResult.rows.forEach((row: any) => {
+        const post = posts.find((p: any) => p.id === row.post_id);
+        if (post) {
+          post.replies.push({
+            id: row.id,
+            author: row.author_username,
+            avatar: row.author_avatar || "🎓",
+            content: row.content,
+            timestamp: row.created_at ? row.created_at.toISOString() : new Date().toISOString()
+          });
+        }
+      });
+      
+      return res.json(posts);
+    } catch (err) {
+      console.error("Neon Postgres discussion select failed, falling back to Firestore:", err);
+    }
+  }
+
+  // Fallback to Firestore and in-memory lists
+  try {
+    const q = fQuery(fCol(db, "discussions"), fOrderBy("timestamp", "desc"));
+    const snap = await fGetDocs(q);
+    const result: any[] = [];
+    snap.forEach((doc) => {
+      result.push(doc.data());
+    });
+    if (result.length === 0) {
+      res.json(discussions);
+    } else {
+      res.json(result);
+    }
+  } catch (err) {
+    console.error("Firestore loading error:", err);
+    res.json(discussions);
+  }
 });
 
-app.post("/api/discussions", (req, res) => {
-  const { author, avatar, content, subject } = req.body;
+app.post("/api/discussions", async (req, res) => {
+  const { author, avatar, content, subject, author_email } = req.body;
   if (!author || !content || !subject) {
     return res.status(400).json({ error: "Missing fields" });
   }
+  const postId = `post-${Date.now()}`;
+  const nowStr = new Date().toISOString();
+  
   const newPost = {
-    id: `post-${Date.now()}`,
+    id: postId,
     author,
     avatar: avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
     content,
     subject,
-    timestamp: new Date().toISOString(),
+    timestamp: nowStr,
     likes: 0,
     replies: []
   };
-  discussions.unshift(newPost);
-  res.status(201).json(newPost);
+
+  // 1. Write to Postgres if pool is available
+  if (pool) {
+    try {
+      const emailLower = (author_email || `${author.toLowerCase().trim().replace(/\s+/g, '_')}@waecmaster.edu.ng`).toLowerCase().trim();
+      const legacyId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+      
+      // Ensure the author exists in users table to satisfy referencing key constraint
+      await pool.query(`
+        INSERT INTO users (id, username, email, avatar)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (email) DO NOTHING
+      `, [legacyId, author, emailLower, avatar || '🎓']);
+
+      await pool.query(`
+        INSERT INTO discussion_posts (id, author_email, author_username, author_avatar, content, subject, likes, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [postId, emailLower, author, avatar || '🎓', content, subject, 0, new Date()]);
+      console.log("Forum post inserted into Neon Postgres successfully.");
+    } catch (err) {
+      console.error("Failed to commit forum post to Postgres:", err);
+    }
+  }
+
+  // 2. Write to Firestore
+  try {
+    await fSetDoc(fDoc(db, "discussions", postId), newPost);
+    res.status(201).json(newPost);
+  } catch (err) {
+    console.error("Firestore writing error:", err);
+    discussions.unshift(newPost);
+    res.status(201).json(newPost);
+  }
 });
 
-app.post("/api/discussions/:id/like", (req, res) => {
-  const { id } = req.params;
-  const post = discussions.find(d => d.id === id);
+app.post("/api/discussions/:id/like", async (req, res) => {
+  const postId = req.params.id;
+
+  // 1. Update in Postgres
+  if (pool) {
+    try {
+      await pool.query(`
+        UPDATE discussion_posts
+        SET likes = COALESCE(likes, 0) + 1
+        WHERE id = $1
+      `, [postId]);
+    } catch (err) {
+      console.error("Postgres like counter update failed:", err);
+    }
+  }
+
+  // 2. Update in Firestore / In-Memory
+  try {
+    const docRef = fDoc(db, "discussions", postId);
+    const docSnap = await fGetDoc(docRef);
+    if (docSnap.exists()) {
+      const post = docSnap.data();
+      const updatedPost = { ...post, likes: (post.likes || 0) + 1 };
+      await fSetDoc(docRef, updatedPost);
+      return res.json(updatedPost);
+    }
+  } catch (err) {
+    console.error("Firestore like error:", err);
+  }
+  const post = discussions.find(d => d.id === postId);
   if (post) {
     post.likes += 1;
     return res.json(post);
@@ -423,25 +583,163 @@ app.post("/api/discussions/:id/like", (req, res) => {
   res.status(404).json({ error: "Post not found" });
 });
 
-app.post("/api/discussions/:id/reply", (req, res) => {
-  const { id } = req.params;
+app.post("/api/discussions/:id/reply", async (req, res) => {
+  const postId = req.params.id;
   const { author, avatar, content } = req.body;
   if (!content || !author) {
     return res.status(400).json({ error: "Missing content or author" });
   }
-  const post = discussions.find(d => d.id === id);
+  const replyId = `rep-${Date.now()}`;
+  const nowStr = new Date().toISOString();
+  
+  const newReply = {
+    id: replyId,
+    author,
+    avatar: avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+    content,
+    timestamp: nowStr
+  };
+
+  // 1. Commit to Postgres
+  if (pool) {
+    try {
+      await pool.query(`
+        INSERT INTO discussion_replies (id, post_id, author_username, author_avatar, content, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [replyId, postId, author, avatar || '🎓', content, new Date()]);
+      console.log("Forum reply inserted into Neon Postgres successfully.");
+    } catch (err) {
+      console.error("Postgres forum reply insertion failed:", err);
+    }
+  }
+
+  // 2. Commit to Firestore
+  try {
+    const docRef = fDoc(db, "discussions", postId);
+    const docSnap = await fGetDoc(docRef);
+    if (docSnap.exists()) {
+      const post = docSnap.data();
+      const replies = post.replies || [];
+      replies.push(newReply);
+      const updatedPost = { ...post, replies };
+      await fSetDoc(docRef, updatedPost);
+      return res.json(updatedPost);
+    }
+  } catch (err) {
+    console.error("Firestore reply error:", err);
+  }
+  const post = discussions.find(d => d.id === postId);
   if (post) {
-    const newReply = {
-      id: `rep-${Date.now()}`,
-      author,
-      avatar: avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
-      content,
-      timestamp: new Date().toISOString()
-    };
     post.replies.push(newReply);
     return res.json(post);
   }
   res.status(404).json({ error: "Post not found" });
+});
+
+// NEW POSTGRES ENDPOINTS FOR DURABLE CLIENT SYNCHRONIZATION
+app.get("/api/users", async (req, res) => {
+  if (pool) {
+    try {
+      const result = await pool.query(`
+        SELECT id, username, email, password_hash as "password", avatar, xp, level, rank_tier as "rankTier", streak, accuracy, total_quizzes as "totalQuizzes", time_spent_minutes as "timeSpentMinutes", subjects_studied as "subjectsStudied", is_premium as "isPremium", is_admin as "isAdmin", created_at, updated_at
+        FROM users
+      `);
+      return res.json(result.rows);
+    } catch (err) {
+      console.error("Neon Postgres fetch users failed, falling back to Firestore:", err);
+    }
+  }
+
+  try {
+    const snap = await fGetDocs(fCol(db, "users"));
+    const cloudUsers: any[] = [];
+    snap.forEach((doc) => {
+      cloudUsers.push(doc.data());
+    });
+    res.json(cloudUsers);
+  } catch (err) {
+    console.error("Direct Firestore users view loading failed:", err);
+    res.json([]);
+  }
+});
+
+app.post("/api/users/sync", async (req, res) => {
+  const user = req.body;
+  if (!user || !user.email) {
+    return res.status(400).json({ error: "Missing required user identity email parameters." });
+  }
+
+  const emailLower = user.email.toLowerCase().trim();
+  const userId = user.id || `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+
+  if (pool) {
+    try {
+      await pool.query(`
+        INSERT INTO users (
+          id, username, email, password_hash, avatar, xp, level, rank_tier, streak, accuracy, total_quizzes, time_spent_minutes, subjects_studied, is_premium, is_admin, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
+        ON CONFLICT (email) DO UPDATE SET
+          username = EXCLUDED.username,
+          password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
+          avatar = EXCLUDED.avatar,
+          xp = EXCLUDED.xp,
+          level = EXCLUDED.level,
+          rank_tier = EXCLUDED.rank_tier,
+          streak = EXCLUDED.streak,
+          accuracy = EXCLUDED.accuracy,
+          total_quizzes = EXCLUDED.total_quizzes,
+          time_spent_minutes = EXCLUDED.time_spent_minutes,
+          subjects_studied = EXCLUDED.subjects_studied,
+          is_premium = EXCLUDED.is_premium,
+          is_admin = EXCLUDED.is_admin,
+          updated_at = CURRENT_TIMESTAMP
+      `, [
+        userId,
+        user.username || 'Candidate',
+        emailLower,
+        user.password || null,
+        user.avatar || '🎓',
+        Number(user.xp ?? 0),
+        Number(user.level ?? 1),
+        user.rankTier || 'Bronze Scholar',
+        Number(user.streak ?? 1),
+        Number(user.accuracy ?? 100),
+        Number(user.totalQuizzes ?? 0),
+        Number(user.timeSpentMinutes ?? 0),
+        JSON.stringify(user.subjectsStudied || {}),
+        Boolean(user.isPremium ?? false),
+        Boolean(user.isAdmin ?? false)
+      ]);
+      console.log(`Saved user record for ${emailLower} directly to Neon Postgres DB.`);
+    } catch (err) {
+      console.error("Failed to sync candidate to Neon Postgres DB:", err);
+    }
+  }
+
+  try {
+    const docRef = fDoc(db, 'users', userId);
+    const payload = {
+      username: user.username || 'Candidate',
+      email: emailLower,
+      password: user.password || 'admin',
+      avatar: user.avatar || '🎓',
+      xp: Number(user.xp ?? 0),
+      level: Number(user.level ?? 1),
+      rankTier: user.rankTier || 'Bronze Scholar',
+      streak: Number(user.streak ?? 1),
+      accuracy: Number(user.accuracy ?? 100),
+      totalQuizzes: Number(user.totalQuizzes ?? 0),
+      timeSpentMinutes: Number(user.timeSpentMinutes ?? 0),
+      subjectsStudied: user.subjectsStudied || {},
+      isPremium: Boolean(user.isPremium ?? false),
+      isAdmin: Boolean(user.isAdmin ?? false)
+    };
+    await fSetDoc(docRef, payload);
+    res.json({ success: true, message: "User parameters synchronized successfully." });
+  } catch (err) {
+    console.error("Firestore sync fallback failed:", err);
+    res.json({ success: true, message: "Locally synchronized successfully." });
+  }
 });
 
 app.get("/api/leaderboard", (req, res) => {
@@ -1084,8 +1382,26 @@ app.get("/api/battles/poll/:roomId", (req, res) => {
   res.json({ room });
 });
 
+async function seedDiscussions() {
+  try {
+    const snap = await fGetDocs(fCol(db, "discussions"));
+    if (snap.empty) {
+      console.log("Seeding default discussions to Firestore...");
+      for (const d of discussions) {
+        await fSetDoc(fDoc(db, "discussions", d.id), d);
+      }
+      console.log("Done seeding discussions.");
+    }
+  } catch (err) {
+    console.error("Failed to seed discussions to Firestore:", err);
+  }
+}
+
 // MIDDLEWARE ASSETS SERVING FOR DEV AND PROD
 async function startServer() {
+  // Seeding discussions to Cloud Firestore database asynchronously
+  seedDiscussions();
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

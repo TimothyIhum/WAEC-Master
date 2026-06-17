@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud2.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safe Catch-all Net (Reject all undefined/unrequested accesses by default)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedAdmin(email) {
+      return email.toLowerCase() == 'temiokusami@gmail.com' || email.toLowerCase() == 'timothyihum@gmail.com' || email.toLowerCase() == 'admin@waecmaster.edu.ng';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Entity validator logic (The 2nd pillar - Validation Blueprints to prevent Update-Gaps and injection)
+    function isValidUser(data) {
+      return data.username is string && data.username.size() > 0 && data.username.size() <= 40
+          && data.email is string && data.email.size() > 0 && data.email.size() <= 100
+          && (data.get('avatar', '🎓') is string && data.get('avatar', '🎓').size() <= 20)
+          && (data.get('xp', 0) is int && data.get('xp', 0) >= 0 && data.get('xp', 0) < 1000000)
+          && (data.get('level', 1) is int && data.get('level', 1) >= 1 && data.get('level', 1) <= 100)
+          && (data.get('rankTier', 'Bronze Scholar') is string && data.get('rankTier', 'Bronze Scholar').size() <= 50)
+          && (data.get('streak', 0) is int && data.get('streak', 0) >= 0)
+          && (data.get('accuracy', 100) is int && data.get('accuracy', 100) >= 0 && data.get('accuracy', 100) <= 100)
+          && (data.get('totalQuizzes', 0) is int && data.get('totalQuizzes', 0) >= 0)
+          && (data.get('timeSpentMinutes', 0) is int && data.get('timeSpentMinutes', 0) >= 0)
+          && (data.get('isPremium', false) is bool)
+          && (data.get('isAdmin', false) is bool);
+    }
+
+    function isValidDiscussion(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.author is string && data.author.size() > 0 && data.author.size() <= 40
+          && data.content is string && data.content.size() > 0 && data.content.size() <= 2000
+          && data.subject is string && data.subject.size() > 0 && data.subject.size() <= 100
+          && (data.get('avatar', '🎓') is string && data.get('avatar', '🎓').size() <= 20)
+          && (data.get('likes', 0) is int && data.get('likes', 0) >= 0);
+    }
+
+    // 1. Users collection
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn(); // Allow lists for leaderboard/matchmaking lookup with default query restrictions
+      
+      allow create: if (
+        isOwner(userId) &&
+        isValidUser(request.resource.data) &&
+        (request.resource.data.isAdmin == false || isBootstrappedAdmin(request.resource.data.email))
+      );
+      
+      allow update: if (
+        isOwner(userId) &&
+        isValidUser(request.resource.data) &&
+        request.resource.data.email == resource.data.email &&
+        (request.resource.data.isAdmin == resource.data.isAdmin || isBootstrappedAdmin(request.resource.data.email))
+      );
+      
+      allow delete: if false; // Users cannot be deleted from typical client-side operations
+    }
+
+    // 2. Discussions collection
+    match /discussions/{discussionId} {
+      allow get, list: if isSignedIn();
+      
+      allow create: if (
+        isSignedIn() &&
+        isValidDiscussion(request.resource.data) &&
+        request.resource.data.author == request.auth.token.email // lock author identity to auth token
+      );
+      
+      allow update: if (
+        isSignedIn() &&
+        isValidDiscussion(request.resource.data) &&
+        resource.data.author == request.auth.token.email && // only the original author can edit
+        request.resource.data.author == resource.data.author // author cannot be modified
+      );
+      
+      allow delete: if isSignedIn() && resource.data.author == request.auth.token.email;
+    }
+  }
+}

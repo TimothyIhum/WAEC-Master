@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile, XP, stats, and authentication metadata",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "avatar": { "type": "string" },
+        "xp": { "type": "integer" },
+        "level": { "type": "integer" },
+        "rankTier": { "type": "string" },
+        "streak": { "type": "integer" },
+        "accuracy": { "type": "integer" },
+        "totalQuizzes": { "type": "integer" },
+        "timeSpentMinutes": { "type": "integer" },
+        "subjectsStudied": { "type": "object" },
+        "isPremium": { "type": "boolean" },
+        "isAdmin": { "type": "boolean" },
+        "email": { "type": "string" },
+        "password": { "type": "string" }
+      },
+      "required": ["username", "email"]
+    },
+    "DiscussionPost": {
+      "title": "DiscussionPost",
+      "description": "Exams discussion board post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "author": { "type": "string" },
+        "avatar": { "type": "string" },
+        "content": { "type": "string" },
+        "subject": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "likes": { "type": "integer" }
+      },
+      "required": ["id", "author", "content", "subject"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of all registered users"
+    },
+    "/discussions/{discussionId}": {
+      "schema": "DiscussionPost",
+      "description": "Collection of community discussion board posts"
+    }
+  }
+}

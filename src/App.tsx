@@ -21,6 +21,7 @@ import SecurityCenter from './components/SecurityCenter';
 import { Question, UserProgress, ParentCheckpoint, Announcement } from './types';
 import { SAMPLE_QUESTIONS } from './data/questions';
 import { downloadOfflineCbtApp } from './utils/appDownloader';
+import { saveUserToFirestore, syncUsersFromFirestore } from './utils/firebaseSync';
 
 export default function App() {
   const [user, setUser] = useState<UserProgress | null>(() => {
@@ -78,10 +79,23 @@ export default function App() {
     });
   };
 
+  // Initial synchronization of all registered users from Firestore on boot
+  React.useEffect(() => {
+    const initSync = async () => {
+      try {
+        await syncUsersFromFirestore();
+      } catch (e) {
+        console.error("Initial Firestore profiles sync failed:", e);
+      }
+    };
+    initSync();
+  }, []);
+
   // Synchronize state and persist session
   React.useEffect(() => {
     if (user) {
       localStorage.setItem('waec_user_session', JSON.stringify(user));
+      saveUserToFirestore(user).catch(e => console.error("Firestore progress sync failed:", e));
       
       // Also update inside registered users list
       const saved = localStorage.getItem('waec_registered_users');
@@ -673,6 +687,7 @@ export default function App() {
                   <CommunityView 
                     currentUsername={user.username}
                     avatar={user.avatar}
+                    currentUserEmail={user.email}
                   />
                 </div>
               )}

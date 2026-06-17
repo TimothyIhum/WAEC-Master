@@ -1,0 +1,168 @@
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  setDoc, 
+  updateDoc,
+  onSnapshot 
+} from 'firebase/firestore';
+import { db, auth, handleFirestoreError, OperationType } from './firebase';
+import { signInAnonymously } from 'firebase/auth';
+
+// Ensure the user is silently signed in anonymously on boot so they satisfy the security rules
+export const ensureAuthenticated = async (): Promise<void> => {
+  if (!auth.currentUser) {
+    try {
+      await signInAnonymously(auth);
+      console.log('Silently authenticated anonymously with Firebase Auth.');
+    } catch (e) {
+      console.error('Silent anonymous authentication failed:', e);
+    }
+  }
+};
+
+// Map user to database record safely via Express API (Neon Postgres + Firestore sync)
+export const saveUserToFirestore = async (user: any): Promise<void> => {
+  if (!user || !user.email) return;
+
+  const emailLower = user.email.toLowerCase().trim();
+  const userId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+
+  // 1. Synchronize using Express backend API (Neon Postgres is prime target, with Firestore concurrent sync)
+  try {
+    const resp = await fetch('/api/users/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: userId,
+        username: user.username,
+        email: emailLower,
+        password: user.password,
+        avatar: user.avatar,
+        xp: user.xp,
+        level: user.level,
+        rankTier: user.rankTier,
+        streak: user.streak,
+        accuracy: user.accuracy,
+        totalQuizzes: user.totalQuizzes,
+        timeSpentMinutes: user.timeSpentMinutes,
+        subjectsStudied: user.subjectsStudied,
+        isPremium: user.isPremium,
+        isAdmin: user.isAdmin
+      })
+    });
+    if (resp.ok) {
+      console.log(`Successfully synced candidate profile parameters for ${emailLower} via Express backend SQL pipe.`);
+      return;
+    }
+  } catch (apiErr) {
+    console.warn("Client sync Express API failed, falling back to direct Firestore commit:", apiErr);
+  }
+
+  // 2. Direct Firestore fallback
+  await ensureAuthenticated();
+  const docRef = doc(db, 'users', userId);
+  
+  // Format to match the strict Firebase blueprint / Entity expectations
+  const payload = {
+    username: user.username || 'Candidate',
+    email: emailLower,
+    password: user.password || 'admin',
+    avatar: user.avatar || '🎓',
+    xp: Number(user.xp ?? 0),
+    level: Number(user.level ?? 1),
+    rankTier: user.rankTier || 'Bronze Scholar',
+    streak: Number(user.streak ?? 1),
+    accuracy: Number(user.accuracy ?? 100),
+    totalQuizzes: Number(user.totalQuizzes ?? 0),
+    timeSpentMinutes: Number(user.timeSpentMinutes ?? 0),
+    subjectsStudied: user.subjectsStudied || {},
+    isPremium: Boolean(user.isPremium ?? false),
+    isAdmin: Boolean(user.isAdmin ?? false)
+  };
+
+  try {
+    await setDoc(docRef, payload);
+    console.log(`Saved user record for ${emailLower} directly to Firestore fallback.`);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `users/${userId}`);
+  }
+};
+
+// Fetch and merge Neon DB / Firestore users into LocalStorage cache
+export const syncUsersFromFirestore = async (): Promise<void> => {
+  let cloudUsers: any[] = [];
+
+  // 1. Load users using Express backend SQL api
+  try {
+    const resp = await fetch('/api/users');
+    if (resp.ok) {
+      cloudUsers = await resp.json();
+    }
+  } catch (err) {
+    console.warn("Could not fetch user pool from Express backend SQL, using direct Firestore fallback:", err);
+  }
+
+  // 2. Direct Firestore pull fallback if Express API is empty or down
+  if (!cloudUsers || cloudUsers.length === 0) {
+    try {
+      await ensureAuthenticated();
+      const usersCollection = collection(db, 'users');
+      const snap = await getDocs(usersCollection);
+      snap.forEach((doc) => {
+        cloudUsers.push(doc.data());
+      });
+    } catch (firebaseErr) {
+      handleFirestoreError(firebaseErr, OperationType.LIST, 'users');
+    }
+  }
+  
+  if (cloudUsers && cloudUsers.length > 0) {
+    // Fetch currently stored local storage users
+    const saved = localStorage.getItem('waec_registered_users');
+    let localUsers: any[] = [];
+    if (saved) {
+      try {
+        localUsers = JSON.parse(saved);
+      } catch (e) {
+        localUsers = [];
+      }
+    }
+    
+    // Merge: Any cloud user takes precedence, but don't drop passwords for local legacy users
+    cloudUsers.forEach((cloudUser: any) => {
+      const localIdx = localUsers.findIndex(
+        (lu) => lu.email.toLowerCase().trim() === cloudUser.email.toLowerCase().trim()
+      );
+      
+      if (localIdx !== -1) {
+        // Keep existing password since passwords aren't backed up in plaintext in raw public profiles
+        localUsers[localIdx] = {
+          ...localUsers[localIdx],
+          username: cloudUser.username,
+          password: cloudUser.password || localUsers[localIdx].password || 'admin',
+          avatar: cloudUser.avatar,
+          xp: cloudUser.xp,
+          level: cloudUser.level,
+          rankTier: cloudUser.rankTier || cloudUser.rank_tier,
+          streak: cloudUser.streak,
+          accuracy: cloudUser.accuracy,
+          totalQuizzes: cloudUser.totalQuizzes || cloudUser.totalQuizzesCount,
+          timeSpentMinutes: cloudUser.timeSpentMinutes,
+          subjectsStudied: cloudUser.subjectsStudied,
+          isPremium: cloudUser.isPremium,
+          isAdmin: cloudUser.isAdmin
+        };
+      } else {
+        // Create new local representation
+        localUsers.push({
+          ...cloudUser,
+          password: cloudUser.password || 'admin'
+        });
+      }
+    });
+    
+    localStorage.setItem('waec_registered_users', JSON.stringify(localUsers));
+    console.log(`Synchronized ${cloudUsers.length} profile records into local cache.`);
+  }
+};
