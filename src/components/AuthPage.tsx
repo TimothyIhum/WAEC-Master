@@ -38,13 +38,13 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
   // Dynamic users data repository in local storage
   const DEFAULT_USERS_DB = [
     {
-      username: 'Triumph_Ihum',
+      username: 'Ihum Triumph',
       email: 'timothyihum@gmail.com',
       password: 'admin',
       isAdmin: true,
       isPremium: true,
       avatar: '🦁',
-      level: 30,
+      level: 35,
       rankTier: 'Diamond Legend',
       streak: 15,
       accuracy: 96,
@@ -60,13 +60,57 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
       }
     },
     {
-      username: 'temiokusami',
+      username: 'Ihum Temitope',
       email: 'temiokusami@gmail.com',
-      password: 'admin',
+      password: '12345678ABC',
       isAdmin: true,
       isPremium: true,
       avatar: '👑',
-      level: 30,
+      level: 35,
+      rankTier: 'Diamond Legend',
+      streak: 15,
+      accuracy: 96,
+      timeSpentMinutes: 1240,
+      totalQuizzes: 28,
+      school: 'King\'s College, Lagos',
+      state: 'Lagos',
+      status: 'Clean',
+      subjectsStudied: {
+        'Mathematics': 640,
+        'English Language': 585,
+        'Physics': 240
+      }
+    },
+    {
+      username: 'Ihum Temitope',
+      email: 'temitope@waecmaster.edu.ng',
+      password: '12345678ABC',
+      isAdmin: true,
+      isPremium: true,
+      avatar: '👑',
+      level: 35,
+      rankTier: 'Diamond Legend',
+      streak: 15,
+      accuracy: 96,
+      timeSpentMinutes: 1240,
+      totalQuizzes: 28,
+      school: 'King\'s College, Lagos',
+      state: 'Lagos',
+      status: 'Clean',
+      subjectsStudied: {
+        'Mathematics': 640,
+        'English Language': 585,
+        'Physics': 240
+      }
+    },
+    {
+      username: 'Ihum Triumph',
+      email: 'triumph@waecmaster.edu.ng',
+      password: 'admin',
+      isAdmin: true,
+      isPremium: true,
+      avatar: '🦁',
+      level: 35,
       rankTier: 'Diamond Legend',
       streak: 15,
       accuracy: 96,
@@ -150,7 +194,52 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
     const saved = localStorage.getItem('waec_registered_users');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          let modified = false;
+          const updated = parsed.map((user: any) => {
+            const defUser = DEFAULT_USERS_DB.find(
+              (du) => du.email.toLowerCase().trim() === user.email.toLowerCase().trim()
+            );
+            if (defUser) {
+              if (
+                user.password !== defUser.password ||
+                user.isAdmin !== defUser.isAdmin ||
+                user.isPremium !== defUser.isPremium ||
+                user.username !== defUser.username
+              ) {
+                modified = true;
+                return {
+                  ...user,
+                  username: defUser.username,
+                  password: defUser.password,
+                  isAdmin: defUser.isAdmin,
+                  isPremium: defUser.isPremium,
+                  avatar: defUser.avatar,
+                  level: Math.max(user.level || 0, defUser.level)
+                };
+              }
+            }
+            return user;
+          });
+
+          // Also guarantee any newly defined users in DEFAULT_USERS_DB are populated
+          DEFAULT_USERS_DB.forEach((defUser) => {
+            const exists = updated.some(
+              (u: any) => u.email.toLowerCase().trim() === defUser.email.toLowerCase().trim()
+            );
+            if (!exists) {
+              updated.push(defUser);
+              modified = true;
+            }
+          });
+
+          if (modified) {
+            localStorage.setItem('waec_registered_users', JSON.stringify(updated));
+            console.log("Synchronized updated hardcoded credentials into browser localStorage.");
+          }
+          return updated;
+        }
       } catch (e) {
         console.error('Failed to parse saved users repository list:', e);
       }
@@ -219,7 +308,11 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
 
       setLoading(true);
       setTimeout(() => {
-        const isAdminUser = emailLower === 'temiokusami@gmail.com' || emailLower === 'admin@waecmaster.edu.ng' || emailLower === 'timothyihum@gmail.com';
+        const isAdminUser = emailLower === 'temiokusami@gmail.com' || 
+                            emailLower === 'admin@waecmaster.edu.ng' || 
+                            emailLower === 'timothyihum@gmail.com' ||
+                            emailLower === 'temitope@waecmaster.edu.ng' ||
+                            emailLower === 'triumph@waecmaster.edu.ng';
 
         const newUser = {
           username: usernameClean,

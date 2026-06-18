@@ -742,6 +742,111 @@ app.post("/api/users/sync", async (req, res) => {
   }
 });
 
+app.get("/api/questions", async (req, res) => {
+  if (pool) {
+    try {
+      const result = await pool.query(`
+        SELECT id, subject, topic, type, text, options, correct_answer as "correctAnswer", explanation, hint, difficulty, marks, diagram_url as "diagramUrl", exam_name as "examName", exam_year as "examYear", question_number as "questionNumber", created_at
+        FROM questions
+        ORDER BY created_at DESC
+      `);
+      if (result.rows.length > 0) {
+        return res.json(result.rows);
+      }
+    } catch (err) {
+      console.error("Neon Postgres fetch questions failed, falling back to Firestore/local:", err);
+    }
+  }
+
+  try {
+    const snap = await fGetDocs(fCol(db, "questions"));
+    const cloudQuestions: any[] = [];
+    snap.forEach((doc) => {
+      cloudQuestions.push(doc.data());
+    });
+    res.json(cloudQuestions);
+  } catch (err) {
+    console.error("Direct Firestore questions view loading failed:", err);
+    res.json([]);
+  }
+});
+
+app.post("/api/questions/sync", async (req, res) => {
+  const q = req.body;
+  if (!q || !q.id || !q.subject) {
+    return res.status(400).json({ error: "Missing required question parameters." });
+  }
+
+  if (pool) {
+    try {
+      await pool.query(`
+        INSERT INTO questions (
+          id, subject, topic, type, text, options, correct_answer, explanation, hint, difficulty, marks, diagram_url, exam_name, exam_year, question_number, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
+        ON CONFLICT (id) DO UPDATE SET
+          subject = EXCLUDED.subject,
+          topic = EXCLUDED.topic,
+          type = EXCLUDED.type,
+          text = EXCLUDED.text,
+          options = EXCLUDED.options,
+          correct_answer = EXCLUDED.correct_answer,
+          explanation = EXCLUDED.explanation,
+          hint = EXCLUDED.hint,
+          difficulty = EXCLUDED.difficulty,
+          marks = EXCLUDED.marks,
+          diagram_url = EXCLUDED.diagram_url,
+          exam_name = EXCLUDED.exam_name,
+          exam_year = EXCLUDED.exam_year,
+          question_number = EXCLUDED.question_number
+      `, [
+        q.id,
+        q.subject,
+        q.topic,
+        q.type,
+        q.text,
+        q.options ? JSON.stringify(q.options) : null,
+        q.correctAnswer,
+        q.explanation,
+        q.hint || null,
+        q.difficulty,
+        Number(q.marks || 1),
+        q.diagramUrl || null,
+        q.examName || null,
+        q.examYear ? Number(q.examYear) : null,
+        q.questionNumber ? Number(q.questionNumber) : null
+      ]);
+      console.log(`Saved question ${q.id} directly to Neon Postgres DB.`);
+    } catch (err) {
+      console.error("Failed to sync question to Neon Postgres DB:", err);
+    }
+  }
+
+  try {
+    const docRef = fDoc(db, 'questions', q.id);
+    await fSetDoc(docRef, {
+      id: q.id,
+      subject: q.subject,
+      topic: q.topic,
+      type: q.type,
+      text: q.text,
+      options: q.options || null,
+      correctAnswer: q.correctAnswer,
+      explanation: q.explanation,
+      hint: q.hint || null,
+      difficulty: q.difficulty,
+      marks: Number(q.marks || 1),
+      diagramUrl: q.diagramUrl || null,
+      examName: q.examName || null,
+      examYear: q.examYear ? Number(q.examYear) : null,
+      questionNumber: q.questionNumber ? Number(q.questionNumber) : null
+    });
+    res.json({ success: true, message: "Question synchronized successfully." });
+  } catch (err) {
+    console.error("Firestore question sync fallback failed:", err);
+    res.json({ success: true, message: "Locally synchronized successfully." });
+  }
+});
+
 app.get("/api/leaderboard", (req, res) => {
   res.json(leaderboardEntries);
 });

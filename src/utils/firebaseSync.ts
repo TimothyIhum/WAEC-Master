@@ -166,3 +166,81 @@ export const syncUsersFromFirestore = async (): Promise<void> => {
     console.log(`Synchronized ${cloudUsers.length} profile records into local cache.`);
   }
 };
+
+// Map question to database record safely via Express API (Neon Postgres + Firestore sync)
+export const saveQuestionToDatabase = async (question: any): Promise<void> => {
+  if (!question || !question.id || !question.subject) return;
+
+  // 1. Synchronize using Express backend API (Neon Postgres is prime target, with Firestore concurrent sync)
+  try {
+    const resp = await fetch('/api/questions/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(question)
+    });
+    if (resp.ok) {
+      console.log(`Successfully synced CBT question ${question.id} via Express backend SQL pipe.`);
+      return;
+    }
+  } catch (apiErr) {
+    console.warn("Client question sync Express API failed, falling back to direct Firestore commit:", apiErr);
+  }
+
+  // 2. Direct Firestore fallback
+  await ensureAuthenticated();
+  const docRef = doc(db, 'questions', question.id);
+  
+  try {
+    await setDoc(docRef, {
+      id: question.id,
+      subject: question.subject,
+      topic: question.topic,
+      type: question.type,
+      text: question.text,
+      options: question.options || null,
+      correctAnswer: question.correctAnswer,
+      explanation: question.explanation,
+      hint: question.hint || null,
+      difficulty: question.difficulty,
+      marks: Number(question.marks || 1),
+      diagramUrl: question.diagramUrl || null,
+      examName: question.examName || null,
+      examYear: question.examYear ? Number(question.examYear) : null,
+      questionNumber: question.questionNumber ? Number(question.questionNumber) : null
+    });
+    console.log(`Saved question ${question.id} directly to Firestore fallback.`);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `questions/${question.id}`);
+  }
+};
+
+// Fetch and merge Neon DB / Firestore questions into LocalStorage cache
+export const syncQuestionsFromDatabase = async (): Promise<any[]> => {
+  let cloudQuestions: any[] = [];
+
+  // 1. Load questions using Express backend SQL api
+  try {
+    const resp = await fetch('/api/questions');
+    if (resp.ok) {
+      cloudQuestions = await resp.json();
+    }
+  } catch (err) {
+    console.warn("Could not fetch questions list from Express backend SQL, using direct Firestore fallback:", err);
+  }
+
+  // 2. Direct Firestore pull fallback
+  if (!cloudQuestions || cloudQuestions.length === 0) {
+    try {
+      await ensureAuthenticated();
+      const snap = await getDocs(collection(db, 'questions'));
+      snap.forEach((doc) => {
+        cloudQuestions.push(doc.data());
+      });
+    } catch (firebaseErr) {
+      handleFirestoreError(firebaseErr, OperationType.LIST, 'questions');
+    }
+  }
+  
+  return cloudQuestions;
+};
+

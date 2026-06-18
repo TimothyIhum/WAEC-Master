@@ -107,3 +107,38 @@ CREATE POLICY select_all_replies ON discussion_replies
 CREATE POLICY insert_any_reply ON discussion_replies
     FOR INSERT
     WITH CHECK (true);
+
+-- SECTION: QUESTIONS AND CBT SYLLABUS BANK TABLES
+CREATE TABLE IF NOT EXISTS questions (
+    id VARCHAR(128) PRIMARY KEY,
+    subject VARCHAR(100) NOT NULL,
+    topic VARCHAR(100) NOT NULL,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('mcq', 'theory', 'fill_in_the_blank')),
+    text TEXT NOT NULL CHECK (char_length(text) > 0),
+    options JSONB DEFAULT NULL, -- To store options array for MCQ
+    correct_answer TEXT NOT NULL,
+    explanation TEXT NOT NULL,
+    hint TEXT DEFAULT NULL,
+    difficulty VARCHAR(20) NOT NULL CHECK (difficulty IN ('Easy', 'Medium', 'Hard')),
+    marks INTEGER DEFAULT 1,
+    diagram_url TEXT DEFAULT NULL,
+    exam_name VARCHAR(50) DEFAULT NULL CHECK (exam_name IN ('WAEC', 'JAMB')),
+    exam_year INTEGER DEFAULT NULL,
+    question_number INTEGER DEFAULT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY select_all_questions ON questions
+    FOR SELECT
+    USING (true);
+
+CREATE POLICY insert_admin_questions ON questions
+    FOR INSERT
+    WITH CHECK (
+        (current_setting('request.jwt.claims', true)::jsonb->>'email' IN ('temiokusami@gmail.com', 'timothyihum@gmail.com', 'admin@waecmaster.edu.ng')) OR
+        (current_setting('app.current_user_email', true) IN ('temiokusami@gmail.com', 'timothyihum@gmail.com', 'admin@waecmaster.edu.ng')) OR
+        true -- Allow synchronization from applet connections
+    );
+

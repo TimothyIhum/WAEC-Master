@@ -171,11 +171,6 @@ export default function AdminPanel({
   // Track edits to candidates to persist dynamically
   React.useEffect(() => {
     localStorage.setItem('waec_registered_users', JSON.stringify(candidates));
-    candidates.forEach(cand => {
-      if (cand && cand.email) {
-        saveUserToFirestore(cand).catch(e => console.error("Firestore candidate sync failed:", e));
-      }
-    });
   }, [candidates]);
 
   const handleAddQuestionLocal = (e: React.FormEvent) => {
@@ -825,6 +820,7 @@ export default function AdminPanel({
                             if (c.username === selectedCandidate.username) {
                               const updated = { ...c, isAdmin: !c.isAdmin };
                               setSelectedCandidate(updated);
+                              saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
                               return updated;
                             }
                             return c;
@@ -844,6 +840,7 @@ export default function AdminPanel({
                             if (c.username === selectedCandidate.username) {
                               const updated = { ...c, isPremium: !c.isPremium };
                               setSelectedCandidate(updated);
+                              saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
                               return updated;
                             }
                             return c;
@@ -869,6 +866,7 @@ export default function AdminPanel({
                               const isNowBanned = !bannedUsers.includes(usr);
                               const updated = { ...c, status: isNowBanned ? 'Banned' : 'Clean' };
                               setSelectedCandidate(updated);
+                              saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
                               return updated;
                             }
                             return c;
@@ -894,6 +892,7 @@ export default function AdminPanel({
                                   xp: (c.xp || 100) + 250
                                 };
                                 setSelectedCandidate(updated);
+                                saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
                                 return updated;
                               }
                               return c;

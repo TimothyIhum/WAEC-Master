@@ -21,7 +21,7 @@ import SecurityCenter from './components/SecurityCenter';
 import { Question, UserProgress, ParentCheckpoint, Announcement } from './types';
 import { SAMPLE_QUESTIONS } from './data/questions';
 import { downloadOfflineCbtApp } from './utils/appDownloader';
-import { saveUserToFirestore, syncUsersFromFirestore } from './utils/firebaseSync';
+import { saveUserToFirestore, syncUsersFromFirestore, saveQuestionToDatabase, syncQuestionsFromDatabase } from './utils/firebaseSync';
 
 export default function App() {
   const [user, setUser] = useState<UserProgress | null>(() => {
@@ -31,7 +31,14 @@ export default function App() {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.email) {
           const emailLower = parsed.email.toLowerCase().trim();
-          if (emailLower === 'timothyihum@gmail.com' || emailLower === 'temiokusami@gmail.com' || emailLower === 'admin@waecmaster.edu.ng') {
+          const adminEmails = [
+            'timothyihum@gmail.com',
+            'temiokusami@gmail.com',
+            'admin@waecmaster.edu.ng',
+            'temitope@waecmaster.edu.ng',
+            'triumph@waecmaster.edu.ng'
+          ];
+          if (adminEmails.includes(emailLower)) {
             parsed.isAdmin = true;
             parsed.isPremium = true;
             if ((parsed.level || 0) < 30) {
@@ -60,8 +67,49 @@ export default function App() {
   // Dynamic Subjects List (can be managed by Admin)
   const [subjectsList, setSubjectsList] = useState<string[]>(() => {
     const saved = localStorage.getItem('waec_subjects');
-    return saved ? JSON.parse(saved) : ['Mathematics', 'English Language', 'Physics', 'Chemistry', 'Biology', 'Economics', 'Government'];
+    return saved ? JSON.parse(saved) : ['Mathematics', 'English Language', 'Physics', 'Chemistry', 'Biology', 'Economics', 'Government', 'Italian'];
   });
+
+  const [appLanguage, setAppLanguage] = useState<'en' | 'it'>(() => {
+    return (localStorage.getItem('waec_lang') as 'en' | 'it') || 'en';
+  });
+
+  const toggleLanguage = () => {
+    const nextLang = appLanguage === 'en' ? 'it' : 'en';
+    setAppLanguage(nextLang);
+    localStorage.setItem('waec_lang', nextLang);
+  };
+
+  const t = (text: string): string => {
+    if (appLanguage === 'en') return text;
+    const ITALIAN_DICTIONARY: Record<string, string> = {
+      'Dashboard': 'Cruscotto',
+      'CBT Simulator': 'Simulatore CBT',
+      'Multiplayer Arena': 'Arena Multigiocatore',
+      'AI Study Coach': 'Tutor di Studio IA',
+      'Leaderboard': 'Classifica',
+      'Study Boards': 'Bacheche di Studio',
+      'Parent LINK': 'Link Genitori',
+      'Security Center': 'Centro di Sicurezza',
+      'CBT Admin': 'Amministratore CBT',
+      'Log Out Account': 'Esci dall\'Account',
+      'Get Standalone App': 'Scarica App Off-line',
+      'Get Offline Standalone App': 'Ottieni App Off-line Unificata',
+      'Standalone Installer': 'Installatore Off-line',
+      'Install the entire study suite as a standalone client to practice all subjects completely offline.': 'Installa l\'intero pacchetto di studio offline come client autonomo per esercitarti in tutte le materie.',
+      'Back to Home': 'Torna alla Home',
+      'Guest mode': 'Modalità ospite',
+      'Mathematics': 'Matematica',
+      'English Language': 'Lingua Inglese',
+      'Physics': 'Fisica',
+      'Chemistry': 'Chimica',
+      'Biology': 'Biologia',
+      'Economics': 'Economia',
+      'Government': 'Governo',
+      'Italian': 'Italiano'
+    };
+    return ITALIAN_DICTIONARY[text] || text;
+  };
 
   const handleAddSubject = (subject: string) => {
     setSubjectsList(prev => {
@@ -79,13 +127,30 @@ export default function App() {
     });
   };
 
-  // Initial synchronization of all registered users from Firestore on boot
+  // Initial synchronization of all registered users and questions from Neon Postgres/Firestore on boot
   React.useEffect(() => {
     const initSync = async () => {
       try {
         await syncUsersFromFirestore();
       } catch (e) {
         console.error("Initial Firestore profiles sync failed:", e);
+      }
+      try {
+        const cloudQs = await syncQuestionsFromDatabase();
+        if (cloudQs && cloudQs.length > 0) {
+          setQuestionsList(prev => {
+            const merged = [...cloudQs];
+            prev.forEach(pq => {
+              if (!merged.some(cq => cq.id === pq.id)) {
+                merged.push(pq);
+              }
+            });
+            localStorage.setItem('waec_questions_list', JSON.stringify(merged));
+            return merged;
+          });
+        }
+      } catch (e) {
+        console.error("Initial questions database sync failed:", e);
       }
     };
     initSync();
@@ -275,6 +340,7 @@ export default function App() {
       localStorage.setItem('waec_questions_list', JSON.stringify(updated));
       return updated;
     });
+    saveQuestionToDatabase(q).catch(e => console.error("Cloud questions sync failed:", e));
   };
 
   const handleDeleteQuestion = (qId: string) => {
@@ -391,15 +457,15 @@ export default function App() {
 
   // Sidebar navigation options
   const NAVIGATION_DOCKS = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'practice', label: 'CBT Simulator', icon: BookOpen },
-    { id: 'battle', label: 'Multiplayer Arena', icon: Flame },
-    { id: 'tutor', label: 'AI Study Coach', icon: Brain },
-    { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
-    { id: 'community', label: 'Study Boards', icon: Users },
-    { id: 'guardian', label: 'Parent LINK', icon: Award },
-    { id: 'secops', label: 'Security Center', icon: Shield },
-    { id: 'admin', label: 'CBT Admin', icon: Database }
+    { id: 'dashboard', label: t('Dashboard'), icon: LayoutDashboard },
+    { id: 'practice', label: t('CBT Simulator'), icon: BookOpen },
+    { id: 'battle', label: t('Multiplayer Arena'), icon: Flame },
+    { id: 'tutor', label: t('AI Study Coach'), icon: Brain },
+    { id: 'leaderboard', label: t('Leaderboard'), icon: Trophy },
+    { id: 'community', label: t('Study Boards'), icon: Users },
+    { id: 'guardian', label: t('Parent LINK'), icon: Award },
+    { id: 'secops', label: t('Security Center'), icon: Shield },
+    { id: 'admin', label: t('CBT Admin'), icon: Database }
   ];
 
   return (
@@ -475,17 +541,17 @@ export default function App() {
               {/* Standalone Desktop Offline App promo card in sidepanel */}
               <div id="offline-install-sidebar-card" className="bg-gradient-to-br from-slate-900 to-indigo-950 p-4 rounded-2xl text-white space-y-2.5 shadow-md border border-slate-800 animate-fadeIn">
                 <div className="flex items-center gap-1.5 font-bold text-xs">
-                  <span>💾</span> Standalone Installer
+                  <span>💾</span> {t('Standalone Installer')}
                 </div>
                 <p className="text-[10px] text-slate-300 leading-normal">
-                  Install the entire study suite as a standalone client to practice all subjects completely offline.
+                  {t('Install the entire study suite as a standalone client to practice all subjects completely offline.')}
                 </p>
                 <button
                   type="button"
                   onClick={() => downloadOfflineCbtApp(SAMPLE_QUESTIONS)}
                   className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-2xs rounded-xl shadow-md transition flex justify-center items-center gap-1.5 cursor-pointer border-0"
                 >
-                  <Download className="w-3.5 h-3.5 text-white" /> Get Standalone App
+                  <Download className="w-3.5 h-3.5 text-white" /> {t('Get Standalone App')}
                 </button>
               </div>
             </div>
@@ -495,7 +561,7 @@ export default function App() {
               onClick={handleLogOutGlobal}
               className="py-2.5 px-3.5 bg-slate-50 hover:bg-red-50 rounded-xl text-xs font-bold text-slate-600 hover:text-red-650 hover:border-red-100 border border-slate-100 transition flex items-center gap-3 cursor-pointer mt-8 animate-fadeIn"
             >
-              <LogOut className="w-4.5 h-4.5 text-slate-450 hover:text-red-500" /> Log Out Account
+              <LogOut className="w-4.5 h-4.5 text-slate-450 hover:text-red-500" /> {t('Log Out Account')}
             </button>
           </aside>
 
@@ -508,12 +574,21 @@ export default function App() {
               </h1>
             </div>
 
-            <button
-              onClick={() => setMobileMenuOpen(prev => !prev)}
-              className="p-1.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-600"
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={toggleLanguage}
+                className="flex items-center gap-1 bg-slate-50 border border-slate-200 text-slate-700 font-bold px-2.5 py-1 rounded-full text-[10px] cursor-pointer shadow-3xs"
+                title="Scegli Lingua / Change Language"
+              >
+                <span>{appLanguage === 'en' ? '🇬🇧 EN' : '🇮🇹 IT'}</span>
+              </button>
+              <button
+                onClick={() => setMobileMenuOpen(prev => !prev)}
+                className="p-1.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-600"
+              >
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
 
           {/* MOBILE SLIDE-OVER DRAWER MENU */}
@@ -581,7 +656,15 @@ export default function App() {
             
             {/* VIBRANT PALETTE DYNAMIC TOP HEADER */}
             <header className="hidden lg:flex h-20 px-8 items-center justify-between bg-white border-b border-slate-200 shrink-0 sticky top-0 z-30">
-              <div className="flex gap-4">
+              <div className="flex gap-4 items-center">
+                <button
+                  onClick={toggleLanguage}
+                  className="flex items-center gap-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 active:scale-95 text-slate-700 font-bold px-4 py-1.5 rounded-full select-none shadow-3xs cursor-pointer text-xs"
+                  title="Cambia Lingua / Change Language"
+                >
+                  <span className="text-sm">{appLanguage === 'en' ? '🇬🇧' : '🇮🇹'}</span>
+                  <span>{appLanguage === 'en' ? 'English' : 'Italiano'}</span>
+                </button>
                 <div className="flex items-center gap-2 bg-rose-50 px-4 py-1.5 rounded-full select-none shadow-3xs">
                   <span className="text-base">🔥</span>
                   <span className="font-bold text-rose-600 text-xs">{user.streak} Day Streak</span>
