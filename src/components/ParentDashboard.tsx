@@ -116,7 +116,7 @@ export default function ParentDashboard({ progress, onUpdateParentConfig, curren
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-1">
               <span className="text-3xs font-bold text-slate-400 uppercase tracking-widest block">Study Target Accomplishment</span>
               <span className="text-lg font-mono font-black text-indigo-700 block">
-                {Math.max(12, Math.round(progress.timeSpentMinutes / 60))} hours total
+                {(progress.timeSpentMinutes / 60).toFixed(1)} hours total
               </span>
               <p className="text-3xs text-slate-500">Daily Goal: {dailyGoalMinutes} minutes</p>
             </div>

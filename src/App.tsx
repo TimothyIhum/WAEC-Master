@@ -34,9 +34,7 @@ export default function App() {
           const adminEmails = [
             'timothyihum@gmail.com',
             'temiokusami@gmail.com',
-            'admin@waecmaster.edu.ng',
-            'temitope@waecmaster.edu.ng',
-            'triumph@waecmaster.edu.ng'
+            'admin@waecmaster.edu.ng'
           ];
           if (adminEmails.includes(emailLower)) {
             parsed.isAdmin = true;
@@ -245,7 +243,7 @@ export default function App() {
   });
 
   // Handle successful login
-  const handleAuthSuccess = (usernameStr: string, isGuest: boolean, emailStr = '') => {
+  const handleAuthSuccess = (usernameStr: string, isGuest: boolean, emailStr = '', fullProfile?: any) => {
     if (isGuest) {
       setUser({
         username: usernameStr,
@@ -263,6 +261,27 @@ export default function App() {
         isPremium: false,
         isAdmin: false,
         email: 'guest@waecmaster.edu.ng'
+      });
+      setShowLanding(false);
+      setActiveTab('dashboard');
+      return;
+    }
+
+    if (fullProfile) {
+      setUser({
+        username: fullProfile.username,
+        avatar: fullProfile.avatar || '🎓',
+        xp: Number(fullProfile.xp ?? 100),
+        level: Number(fullProfile.level ?? 1),
+        rankTier: fullProfile.rankTier || 'Bronze Scholar',
+        streak: Number(fullProfile.streak ?? 1),
+        accuracy: Number(fullProfile.accuracy ?? 100),
+        timeSpentMinutes: Number(fullProfile.timeSpentMinutes ?? 0),
+        totalQuizzes: Number(fullProfile.totalQuizzes ?? 0),
+        subjectsStudied: fullProfile.subjectsStudied || {},
+        isPremium: Boolean(fullProfile.isPremium || fullProfile.isAdmin),
+        isAdmin: Boolean(fullProfile.isAdmin),
+        email: fullProfile.email
       });
       setShowLanding(false);
       setActiveTab('dashboard');
@@ -486,7 +505,7 @@ export default function App() {
       {!showLanding && !user && (
         <AuthPage 
           initialMode={authMode}
-          onAuthSuccess={(profile) => handleAuthSuccess(profile.username, false, profile.email)}
+          onAuthSuccess={(profile) => handleAuthSuccess(profile.username, false, profile.email, profile)}
           onBackToLanding={() => setShowLanding(true)}
           onGuestMode={() => handleAuthSuccess('Guest_Scholar', true)}
         />

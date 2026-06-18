@@ -329,6 +329,107 @@ app.post("/api/auth/verify-code", createRateLimiterMiddleware("auth", 10), (req,
   res.json({ success: true, message: "Email code successfully verified!" });
 });
 
+// A real authentication endpoint pointing directly to the Neon Database
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: "Please enter your email and password." });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+
+  if (pool) {
+    try {
+      const result = await pool.query(`
+        SELECT id, username, email, password_hash as "password", avatar, xp, level, rank_tier as "rankTier", streak, accuracy, total_quizzes as "totalQuizzes", time_spent_minutes as "timeSpentMinutes", subjects_studied as "subjectsStudied", is_premium as "isPremium", is_admin as "isAdmin"
+        FROM users
+        WHERE LOWER(email) = LOWER($1)
+      `, [emailLower]);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: "No user registered with this email address in the database. Please sign up first." });
+      }
+
+      const dbUser = result.rows[0];
+      if (dbUser.password !== password) {
+        return res.status(401).json({ error: "Incorrect password. Please try again or click Forgot Password." });
+      }
+
+      // Successful login from Postgres
+      let subjectsStudied = dbUser.subjectsStudied;
+      if (typeof subjectsStudied === "string") {
+        try {
+          subjectsStudied = JSON.parse(subjectsStudied);
+        } catch (e) {
+          subjectsStudied = {};
+        }
+      }
+
+      return res.json({
+        success: true,
+        user: {
+          id: dbUser.id,
+          username: dbUser.username,
+          email: dbUser.email,
+          avatar: dbUser.avatar || '🎓',
+          level: Number(dbUser.level ?? 1),
+          xp: Number(dbUser.xp ?? 0),
+          rankTier: dbUser.rankTier || 'Bronze Scholar',
+          streak: Number(dbUser.streak ?? 1),
+          accuracy: Number(dbUser.accuracy ?? 100),
+          totalQuizzes: Number(dbUser.totalQuizzes ?? 0),
+          timeSpentMinutes: Number(dbUser.timeSpentMinutes ?? 0),
+          subjectsStudied: subjectsStudied || {},
+          isPremium: Boolean(dbUser.isPremium),
+          isAdmin: Boolean(dbUser.isAdmin)
+        }
+      });
+    } catch (err) {
+      console.error("Neon Postgres connection authentication check failed:", err);
+      return res.status(500).json({ error: "Database error during login. Please try again later." });
+    }
+  } else {
+    // Falls back to direct Firestore checks as a robust secondary mode
+    try {
+      const userId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+      const docRef = fDoc(db, 'users', userId);
+      const docSnap = await fGetDoc(docRef);
+
+      if (!docSnap.exists()) {
+        return res.status(404).json({ error: "No user registered with this email address. Please sign up first." });
+      }
+
+      const fUser = docSnap.data();
+      if (fUser.password !== password) {
+        return res.status(401).json({ error: "Incorrect password. Please try again or click Forgot Password." });
+      }
+
+      return res.json({
+        success: true,
+        user: {
+          id: userId,
+          username: fUser.username,
+          email: fUser.email,
+          avatar: fUser.avatar || '🎓',
+          level: Number(fUser.level ?? 1),
+          xp: Number(fUser.xp ?? 0),
+          rankTier: fUser.rankTier || 'Bronze Scholar',
+          streak: Number(fUser.streak ?? 1),
+          accuracy: Number(fUser.accuracy ?? 100),
+          totalQuizzes: Number(fUser.totalQuizzes ?? 0),
+          timeSpentMinutes: Number(fUser.timeSpentMinutes ?? 0),
+          subjectsStudied: fUser.subjectsStudied || {},
+          isPremium: Boolean(fUser.isPremium ?? false),
+          isAdmin: Boolean(fUser.isAdmin ?? false)
+        }
+      });
+    } catch (err) {
+      console.error("Firestore authentication system failed:", err);
+      return res.status(500).json({ error: "Authentication system offline. Please try again later." });
+    }
+  }
+});
+
 // In-Memory Global Datastores so multiple tabs can interact in real-time
 let announcements = [
   {

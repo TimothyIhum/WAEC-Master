@@ -53,13 +53,13 @@ export default function AnalyticsView({ progress, onNavigateToQuiz }: AnalyticsV
 
           <div className="bg-white border border-slate-100 p-5 rounded-2xl relative">
             <span className="text-3xs font-extrabold uppercase tracking-widest text-slate-400 block">Hours Studied</span>
-            <span className="font-mono text-2xl font-black text-indigo-700 block mt-1">{Math.max(12, Math.round(progress.timeSpentMinutes / 60))} hrs</span>
+            <span className="font-mono text-2xl font-black text-indigo-700 block mt-1">{(progress.timeSpentMinutes / 60).toFixed(1)} hrs</span>
             <span className="text-3xs text-slate-500 block mt-2.5">Focus accuracy rising</span>
           </div>
 
           <div className="bg-white border border-slate-100 p-5 rounded-2xl relative">
             <span className="text-3xs font-extrabold uppercase tracking-widest text-slate-400 block">Quizzes Done</span>
-            <span className="font-mono text-2xl font-black text-indigo-700 block mt-1">{progress.totalQuizzes || 8}</span>
+            <span className="font-mono text-2xl font-black text-indigo-700 block mt-1">{progress.totalQuizzes ?? 0}</span>
             <span className="text-3xs text-slate-500 block mt-2.5">Weekly quota exceeded</span>
           </div>
 
@@ -68,7 +68,7 @@ export default function AnalyticsView({ progress, onNavigateToQuiz }: AnalyticsV
             <span className="font-mono text-2xl font-black text-amber-500 block mt-1 flex items-center gap-1">
               🔥 {progress.streak} days
             </span>
-            <span className="text-3xs text-slate-500 block mt-2.5">Best streak: {Math.max(8, progress.streak)} days</span>
+            <span className="text-3xs text-slate-500 block mt-2.5">Best streak: {progress.streak} days</span>
           </div>
         </div>
 

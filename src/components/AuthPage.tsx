@@ -85,9 +85,9 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
       username: 'Ihum Temitope',
       email: 'temitope@waecmaster.edu.ng',
       password: '12345678ABC',
-      isAdmin: true,
-      isPremium: true,
-      avatar: '👑',
+      isAdmin: false,
+      isPremium: false,
+      avatar: '👧',
       level: 35,
       rankTier: 'Diamond Legend',
       streak: 15,
@@ -107,9 +107,9 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
       username: 'Ihum Triumph',
       email: 'triumph@waecmaster.edu.ng',
       password: 'admin',
-      isAdmin: true,
-      isPremium: true,
-      avatar: '🦁',
+      isAdmin: false,
+      isPremium: false,
+      avatar: '👦',
       level: 35,
       rankTier: 'Diamond Legend',
       streak: 15,
@@ -249,7 +249,7 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
     return DEFAULT_USERS_DB;
   };
 
-  const handleAction = (e: React.FormEvent) => {
+  const handleAction = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
@@ -262,30 +262,43 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
         return;
       }
       setLoading(true);
-      setTimeout(() => {
+      try {
+        const resp = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await resp.json();
         setLoading(false);
-        
-        const matchedUser = currentUsers.find(
-          (u: any) => u.email.toLowerCase().trim() === email.toLowerCase().trim()
+
+        if (!resp.ok) {
+          setErrorMsg(data.error || 'Authentication failed.');
+          return;
+        }
+
+        // Keep local cache synced for seamless offline-first actions
+        const currentUsers = getRegisteredUsers();
+        const matchedIndex = currentUsers.findIndex(
+          (u: any) => u.email.toLowerCase().trim() === data.user.email.toLowerCase().trim()
         );
-
-        if (!matchedUser) {
-          setErrorMsg('No user registered with this email address. Please sign up first.');
-          return;
+        const completeUserData = {
+          ...data.user,
+          password // keep password in local session
+        };
+        if (matchedIndex !== -1) {
+          currentUsers[matchedIndex] = completeUserData;
+        } else {
+          currentUsers.push(completeUserData);
         }
-
-        if (matchedUser.password !== password) {
-          setErrorMsg('Incorrect password. Please try again or click Forgot Password.');
-          return;
-        }
+        localStorage.setItem('waec_registered_users', JSON.stringify(currentUsers));
 
         // Successfully logged in real user!
-        onAuthSuccess({
-          username: matchedUser.username,
-          email: matchedUser.email,
-          avatar: matchedUser.avatar || '🦁'
-        });
-      }, 1000);
+        onAuthSuccess(completeUserData);
+      } catch (err) {
+        setLoading(false);
+        setErrorMsg('Database connection offline. Please check your internet connection.');
+        console.error('Login action database query fail:', err);
+      }
     } else if (mode === 'signup') {
       if (!username || !email || !password) {
         setErrorMsg('Please populate all credential inputs.');
@@ -310,9 +323,7 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
       setTimeout(() => {
         const isAdminUser = emailLower === 'temiokusami@gmail.com' || 
                             emailLower === 'admin@waecmaster.edu.ng' || 
-                            emailLower === 'timothyihum@gmail.com' ||
-                            emailLower === 'temitope@waecmaster.edu.ng' ||
-                            emailLower === 'triumph@waecmaster.edu.ng';
+                            emailLower === 'timothyihum@gmail.com';
 
         const newUser = {
           username: usernameClean,
