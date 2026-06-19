@@ -41,10 +41,8 @@ import {
   query as fQuery, 
   orderBy as fOrderBy 
 } from "firebase/firestore";
+import firebaseConfig from "./firebase-applet-config.json";
 
-const firebaseConfig = JSON.parse(
-  fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8")
-);
 const firebaseApp = initFirebaseApp(firebaseConfig);
 const db = getBackendFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
 
