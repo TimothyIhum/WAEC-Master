@@ -26,7 +26,7 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.username is string && data.username.size() > 0 && data.username.size() <= 40
           && data.email is string && data.email.size() > 0 && data.email.size() <= 100
-          && (data.get('avatar', '🎓') is string && data.get('avatar', '🎓').size() <= 20)
+          && (data.get('avatar', '🎓') is string && data.get('avatar', '🎓').size() <= 200)
           && (data.get('xp', 0) is int && data.get('xp', 0) >= 0 && data.get('xp', 0) < 1000000)
           && (data.get('level', 1) is int && data.get('level', 1) >= 1 && data.get('level', 1) <= 100)
           && (data.get('rankTier', 'Bronze Scholar') is string && data.get('rankTier', 'Bronze Scholar').size() <= 50)
@@ -43,7 +43,7 @@ service cloud.firestore {
           && data.author is string && data.author.size() > 0 && data.author.size() <= 40
           && data.content is string && data.content.size() > 0 && data.content.size() <= 2000
           && data.subject is string && data.subject.size() > 0 && data.subject.size() <= 100
-          && (data.get('avatar', '🎓') is string && data.get('avatar', '🎓').size() <= 20)
+          && (data.get('avatar', '🎓') is string && data.get('avatar', '🎓').size() <= 200)
           && (data.get('likes', 0) is int && data.get('likes', 0) >= 0);
     }
 
@@ -71,19 +71,16 @@ service cloud.firestore {
 
     // 2. Discussions collection
     match /discussions/{discussionId} {
-      allow get, list: if isSignedIn();
+      allow get, list: if true;
       
       allow create: if (
-        isSignedIn() &&
-        isValidDiscussion(request.resource.data) &&
-        request.resource.data.author == request.auth.token.email
+        (isSignedIn() && isValidDiscussion(request.resource.data) && request.resource.data.author == request.auth.token.email) ||
+        (request.auth == null && discussionId.startsWith('post-') && isValidDiscussion(request.resource.data))
       );
       
       allow update: if (
-        isSignedIn() &&
-        isValidDiscussion(request.resource.data) &&
-        resource.data.author == request.auth.token.email &&
-        request.resource.data.author == resource.data.author
+        (isSignedIn() && isValidDiscussion(request.resource.data) && resource.data.author == request.auth.token.email && request.resource.data.author == resource.data.author) ||
+        (request.auth == null && discussionId.startsWith('post-') && isValidDiscussion(request.resource.data))
       );
       
       allow delete: if isSignedIn() && resource.data.author == request.auth.token.email;

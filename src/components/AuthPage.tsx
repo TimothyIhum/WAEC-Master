@@ -268,8 +268,21 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
-        const data = await resp.json();
+        
         setLoading(false);
+
+        if (resp.status === 404) {
+          setErrorMsg('Login API endpoint not found on this domain. Please make sure to Export/Sync your latest changes from AI Studio to GitHub so Vercel redeploys with your new database-backed authentication endpoints!');
+          return;
+        }
+
+        let data: any;
+        try {
+          data = await resp.json();
+        } catch (e) {
+          setErrorMsg('Server returned an unexpected response. If this is a recent update, make sure Vercel has finished redeploying your backend.');
+          return;
+        }
 
         if (!resp.ok) {
           setErrorMsg(data.error || 'Authentication failed.');
