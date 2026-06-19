@@ -74,10 +74,10 @@ export default function AdminPanel({
     // Fallback seed
     const defaultData = [
       {
-        username: 'temiokusami',
-        email: 'temiokusami@gmail.com',
-        avatar: '👑',
-        level: 30,
+        username: 'Ihum Triumph',
+        email: 'timothyihum@gmail.com',
+        avatar: '🦁',
+        level: 35,
         rankTier: 'Diamond Legend',
         streak: 15,
         accuracy: 96,
@@ -95,64 +95,67 @@ export default function AdminPanel({
         isPremium: true
       },
       {
-        username: 'admin',
-        email: 'admin@waecmaster.edu.ng',
-        avatar: '🛡️',
-        level: 18,
+        username: 'Ihum Temitope',
+        email: 'temiokusami@gmail.com',
+        avatar: '👑',
+        level: 35,
         rankTier: 'Diamond Legend',
-        streak: 10,
-        accuracy: 92,
-        timeSpentMinutes: 840,
-        totalQuizzes: 15,
+        streak: 15,
+        accuracy: 96,
+        timeSpentMinutes: 1240,
+        totalQuizzes: 28,
         status: 'Clean',
-        school: 'WAEC Academy, Abuja',
-        state: 'Abuja',
+        school: 'King\'s College, Lagos',
+        state: 'Lagos',
         subjectsStudied: {
-          'Mathematics': 420,
-          'English Language': 280
+          'Mathematics': 640,
+          'English Language': 585,
+          'Physics': 240
         },
         isAdmin: true,
         isPremium: true
       },
       {
-        username: 'Chioma_Lagos',
-        email: 'chioma@gmail.com',
-        avatar: '🦊',
-        level: 12,
-        rankTier: 'Gold Champion',
-        streak: 8,
-        accuracy: 86,
-        timeSpentMinutes: 520,
-        totalQuizzes: 14,
+        username: 'Ihum Temitope',
+        email: 'temitope@waecmaster.edu.ng',
+        avatar: '👧',
+        level: 35,
+        rankTier: 'Diamond Legend',
+        streak: 15,
+        accuracy: 96,
+        timeSpentMinutes: 1240,
+        totalQuizzes: 28,
         status: 'Clean',
-        school: 'Queens College, Yaba',
+        school: 'King\'s College, Lagos',
         state: 'Lagos',
         subjectsStudied: {
-          'Mathematics': 420,
-          'English Language': 390
+          'Mathematics': 640,
+          'English Language': 585,
+          'Physics': 240
         },
-        isAdmin: false,
-        isPremium: false
+        isAdmin: true,
+        isPremium: true
       },
       {
-        username: 'Kofi_Accra',
-        email: 'kofi@gmail.com',
-        avatar: '⚡',
-        level: 10,
-        rankTier: 'Gold Champion',
-        streak: 11,
-        accuracy: 82,
-        timeSpentMinutes: 440,
-        totalQuizzes: 11,
+        username: 'Ihum Triumph',
+        email: 'triumph@waecmaster.edu.ng',
+        avatar: '👦',
+        level: 35,
+        rankTier: 'Diamond Legend',
+        streak: 15,
+        accuracy: 96,
+        timeSpentMinutes: 1240,
+        totalQuizzes: 28,
         status: 'Clean',
-        school: 'Accra High School, Accra',
-        state: 'Greater Accra',
+        school: 'King\'s College, Lagos',
+        state: 'Lagos',
         subjectsStudied: {
-          'Mathematics': 380,
-          'English Language': 310
+          'Mathematics': 640,
+          'English Language': 585,
+          'Physics': 240
         },
-        isAdmin: false,
-        isPremium: false
+        isAdmin: true,
+        isPremium: true
       }
     ];
     localStorage.setItem('waec_registered_users', JSON.stringify(defaultData));

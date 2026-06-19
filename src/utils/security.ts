@@ -30,70 +30,9 @@ export interface SecurityStatus {
 }
 
 // In-memory threat database, shared with Server and Client
-export const mockAuditLogs: AuditLog[] = [
-  {
-    id: "audit-1",
-    timestamp: new Date(Date.now() - 50 * 60 * 1000).toISOString(),
-    user: "System Admin",
-    ip: "102.89.43.12",
-    action: "ADMIN_LOGIN",
-    result: "Success",
-    details: "Super Admin panel accessed via secure TLS and verified session token.",
-    severity: "Info"
-  },
-  {
-    id: "audit-2",
-    timestamp: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
-    user: "197.210.64.9",
-    ip: "197.210.64.9",
-    action: "REGISTRATION_BRUTE_FORCE",
-    result: "Blocked",
-    details: "IP attempted 25 rapid sign-ups using automated bot payloads. Temporarily blocked by WAF.",
-    severity: "High"
-  },
-  {
-    id: "audit-3",
-    timestamp: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
-    user: "Stranger_Hacker",
-    ip: "41.90.155.221",
-    action: "SQL_INJECTION",
-    result: "Blocked",
-    details: "Detected potential SQLi pattern 'OR 1=1' in subject search query field. Payload neutralized safely.",
-    severity: "Critical"
-  },
-  {
-    id: "audit-4",
-    timestamp: new Date(Date.now() - 28 * 60 * 1000).toISOString(),
-    user: "Cheating_Bot_Alpha",
-    ip: "102.90.12.82",
-    action: "LEADERBOARD_INTEGRITY",
-    result: "Flagged",
-    details: "XP sync rejected! Attempted to increment 8,500 XP within 1.2s. Flagged candidate account.",
-    severity: "High"
-  },
-  {
-    id: "audit-5",
-    timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    user: "Grace_Freetown",
-    ip: "197.210.82.115",
-    action: "CBT_COMPLETION",
-    result: "Success",
-    details: "Successfully scored 85% in Mathematics. Score verified by step-by-step telemetry checks.",
-    severity: "Info"
-  },
-  {
-    id: "audit-6",
-    timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    user: "41.105.23.4",
-    ip: "41.105.23.4",
-    action: "API_FLOODING",
-    result: "Blocked",
-    details: "Tutor API rate limit reached (more than 15 requests in 60s). Handled dynamically by rate limiter.",
-    severity: "Medium"
-  }
-];
+export const mockAuditLogs: AuditLog[] = [];
 
-export const mockBlockedIps = new Set<string>(["197.210.64.9", "41.105.23.4"]);
+export const mockBlockedIps = new Set<string>();
 
 /**
  * Custom Input Sanitizer
