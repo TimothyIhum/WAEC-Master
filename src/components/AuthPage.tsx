@@ -277,10 +277,13 @@ export default function AuthPage({ initialMode, onAuthSuccess, onBackToLanding, 
         }
 
         let data: any;
+        const textResp = await resp.text();
         try {
-          data = await resp.json();
+          data = JSON.parse(textResp);
         } catch (e) {
-          setErrorMsg('Server returned an unexpected response. If this is a recent update, make sure Vercel has finished redeploying your backend.');
+          console.error("Non-JSON login response. HTTP Status:", resp.status, "Body:", textResp);
+          const truncated = textResp.slice(0, 140).replace(/<[^>]*>/g, ""); // strip HTML tags
+          setErrorMsg(`Server returned unexpected response (${resp.status}): ${truncated || "Empty body"}... Please check server logs.`);
           return;
         }
 

@@ -1,11 +1,11 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 import fs from "fs";
 import pg from "pg";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
@@ -29,6 +29,9 @@ if (databaseUrl) {
   console.warn("Neon Database Connection URL is missing. Falling back to Firestore/In-Memory mode.");
 }
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 import { initializeApp as initFirebaseApp } from "firebase/app";
 import { 
   getFirestore as getBackendFirestore, 
@@ -41,10 +44,40 @@ import {
   query as fQuery, 
   orderBy as fOrderBy 
 } from "firebase/firestore";
-import firebaseConfig from "./firebase-applet-config.json";
 
+function loadFirebaseConfig() {
+  const possiblePaths = [
+    path.join(process.cwd(), "firebase-applet-config.json"),
+    path.join(__dirname, "firebase-applet-config.json"),
+    path.join(__dirname, "..", "firebase-applet-config.json"),
+  ];
+
+  for (const p of possiblePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        const data = fs.readFileSync(p, "utf8");
+        return JSON.parse(data);
+      }
+    } catch (e) {
+      // Continue checking paths
+    }
+  }
+
+  // Fallback default config if all files fail, preventing a crash on import
+  console.warn("Could not find firebase-applet-config.json. Using fallback config.");
+  return {
+    projectId: process.env.FIREBASE_PROJECT_ID || "ai-studio-8d057e99-47bc-4df2-954c-2ac39eea07cd",
+    appId: process.env.FIREBASE_APP_ID || "",
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "",
+    apiKey: process.env.FIREBASE_API_KEY || "",
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || "ai-studio-8d057e99-47bc-4df2-954c-2ac39eea07cd.firebaseapp.com",
+    messagingSenderId: process.env.FIREBASE_SENDER_ID || ""
+  };
+}
+
+const firebaseConfig = loadFirebaseConfig();
 const firebaseApp = initFirebaseApp(firebaseConfig);
-const db = getBackendFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+const db = getBackendFirestore(firebaseApp, (firebaseConfig as any).firestoreDatabaseId);
 
 // In-Memory active verification codes datastore
 interface VerificationRecord {
@@ -154,10 +187,18 @@ app.use((req, res, next) => {
     "http://localhost:5173",
     "https://waecmaster.edu.ng"
   ];
-  if (origin && whitelist.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
+  if (origin) {
+    const isAllowed = 
+      whitelist.includes(origin) || 
+      origin.startsWith("http://localhost:") || 
+      origin.endsWith(".vercel.app") ||
+      origin.includes(".run.app");
+    if (isAllowed) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    } else {
+      res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+    }
   } else {
-    // If running in development we can fallback safely to same origin or AIS dev URLs
     res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
   }
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
@@ -1607,6 +1648,7 @@ async function startServer() {
   seedDiscussions();
 
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
