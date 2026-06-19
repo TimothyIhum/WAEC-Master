@@ -29,8 +29,17 @@ if (databaseUrl) {
   console.warn("Neon Database Connection URL is missing. Falling back to Firestore/In-Memory mode.");
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let __filename = "";
+let __dirname = "";
+try {
+  // @ts-ignore
+  if (typeof import.meta !== "undefined" && import.meta && import.meta.url) {
+    __filename = fileURLToPath(import.meta.url);
+    __dirname = path.dirname(__filename);
+  }
+} catch (e) {
+  // Fallback for transpiled CommonJS environments
+}
 
 import { initializeApp as initFirebaseApp } from "firebase/app";
 import { 
@@ -47,10 +56,13 @@ import {
 
 function loadFirebaseConfig() {
   const possiblePaths = [
-    path.join(process.cwd(), "firebase-applet-config.json"),
-    path.join(__dirname, "firebase-applet-config.json"),
-    path.join(__dirname, "..", "firebase-applet-config.json"),
+    path.join(process.cwd(), "firebase-applet-config.json")
   ];
+
+  if (__dirname) {
+    possiblePaths.push(path.join(__dirname, "firebase-applet-config.json"));
+    possiblePaths.push(path.join(__dirname, "..", "firebase-applet-config.json"));
+  }
 
   for (const p of possiblePaths) {
     try {
