@@ -10,7 +10,12 @@ import { fileURLToPath } from "url";
 dotenv.config();
 
 const { Pool } = pg;
-const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+const databaseUrl = 
+  process.env.DATABASE_URL || 
+  process.env.SUPABASE_DATABASE_URL || 
+  process.env.SUPABASE_URL_NON_POOLING || 
+  process.env.POSTGRES_URL || 
+  process.env.NEON_DATABASE_URL;
 let pool: pg.Pool | null = null;
 
 if (databaseUrl) {
@@ -21,12 +26,12 @@ if (databaseUrl) {
         rejectUnauthorized: false,
       },
     });
-    console.log("Neon Database Pool configured successfully.");
+    console.log("PostgreSQL Database Pool (Supabase/Neon) configured successfully.");
   } catch (err) {
-    console.error("Neon Database Pool initialization failed:", err);
+    console.error("PostgreSQL Database Pool initialization failed:", err);
   }
 } else {
-  console.warn("Neon Database Connection URL is missing. Falling back to Firestore/In-Memory mode.");
+  console.warn("PostgreSQL Database Connection URL is missing. Falling back to Firestore/In-Memory mode.");
 }
 
 let __filename = "";
