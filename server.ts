@@ -66,12 +66,14 @@ function loadFirebaseConfig() {
   // Fallback default config if all files fail, preventing a crash on import
   console.warn("Could not find firebase-applet-config.json. Using fallback config.");
   return {
-    projectId: process.env.FIREBASE_PROJECT_ID || "ai-studio-8d057e99-47bc-4df2-954c-2ac39eea07cd",
-    appId: process.env.FIREBASE_APP_ID || "",
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "",
-    apiKey: process.env.FIREBASE_API_KEY || "",
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN || "ai-studio-8d057e99-47bc-4df2-954c-2ac39eea07cd.firebaseapp.com",
-    messagingSenderId: process.env.FIREBASE_SENDER_ID || ""
+    projectId: process.env.FIREBASE_PROJECT_ID || "festive-backup-ff4nj",
+    appId: process.env.FIREBASE_APP_ID || "1:74787964544:web:ee8123d2c6e31661ccc865",
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "festive-backup-ff4nj.firebasestorage.app",
+    apiKey: process.env.FIREBASE_API_KEY || "AIzaSyAQXqUR58EddDWAOahtaeFW3lEMnDK-BCo",
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || "festive-backup-ff4nj.firebaseapp.com",
+    firestoreDatabaseId: "ai-studio-8d057e99-47bc-4df2-954c-2ac39eea07cd",
+    messagingSenderId: process.env.FIREBASE_SENDER_ID || "74787964544",
+    measurementId: ""
   };
 }
 
