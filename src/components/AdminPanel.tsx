@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Database, Plus, ShieldCheck, Mail, Sliders, ChevronDown, CheckCircle, 
-  Trash2, Sparkles, Upload, RefreshCw, AlertTriangle, Send, Book, ShieldAlert
+  Trash2, Sparkles, Upload, RefreshCw, AlertTriangle, Send, Book, ShieldAlert,
+  Lock, KeyRound, QrCode
 } from 'lucide-react';
 import { Question, Announcement } from '../types';
 import { SUBJECTS_LIST } from '../data/questions';
@@ -29,7 +30,7 @@ export default function AdminPanel({
   onDeleteSubject,
   adminEmail
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'questions' | 'ai_bulk' | 'ocr_extract' | 'csv' | 'users' | 'announcements' | 'subjects'>('questions');
+  const [activeTab, setActiveTab] = useState<'questions' | 'ai_bulk' | 'ocr_extract' | 'csv' | 'users' | 'announcements' | 'subjects' | 'otp'>('questions');
 
   // CBT operations authorization code states
   const [securityPendingAction, setSecurityPendingAction] = useState<{
@@ -45,14 +46,52 @@ export default function AdminPanel({
   const [otpSubmitting, setOtpSubmitting] = useState(false);
   const [otpDevCode, setOtpDevCode] = useState(''); // Dev fallback helper code
 
+  // Admin dynamic OTP states
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [adminOtpGenerated, setAdminOtpGenerated] = useState<string | null>(null);
+  const [adminOtpExpiresAt, setAdminOtpExpiresAt] = useState<number | null>(null);
+  const [adminOtpTimeLeft, setAdminOtpTimeLeft] = useState<number>(0); // in seconds
+  const [adminOtpVerifying, setAdminOtpVerifying] = useState(false);
+  const [adminOtpError, setAdminOtpError] = useState('');
+  const [adminOtpSuccessMsg, setAdminOtpSuccessMsg] = useState('');
+
+  // immediately on activeTab === 'otp' open, request for account password
+  useEffect(() => {
+    if (activeTab === 'otp') {
+      setAdminPasswordInput('');
+      setAdminOtpGenerated(null);
+      setAdminOtpExpiresAt(null);
+      setAdminOtpTimeLeft(0);
+      setAdminOtpError('');
+      setAdminOtpSuccessMsg('');
+    }
+  }, [activeTab]);
+
+  // Countdown timer for generated OTP
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (adminOtpGenerated && adminOtpExpiresAt) {
+      interval = setInterval(() => {
+        const remaining = Math.max(0, Math.floor((adminOtpExpiresAt - Date.now()) / 1000));
+        setAdminOtpTimeLeft(remaining);
+        if (remaining <= 0) {
+          setAdminOtpGenerated(null);
+          setAdminOtpExpiresAt(null);
+          setAdminOtpSuccessMsg('');
+        }
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [adminOtpGenerated, adminOtpExpiresAt]);
+
   const requestSecurityVerification = (actionId: string, candidateUsername: string, description: string, executionCallback: () => void) => {
     setOtpError('');
     setOtpCode('');
-    setOtpSent(false);
+    setOtpSent(true); 
     setOtpDevCode('');
-    setOtpSubmitting(true);
-
-    const activeAdminMail = adminEmail || 'admin@waecmaster.edu.ng';
+    setOtpSubmitting(false);
 
     // Set pending action
     setSecurityPendingAction({
@@ -60,33 +99,6 @@ export default function AdminPanel({
       username: candidateUsername,
       onVerify: executionCallback,
       description
-    });
-
-    // Send the code to the backend
-    fetch('/api/admin/send-secure-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: activeAdminMail,
-        actionDescription: `${description} for user: ${candidateUsername}`
-      })
-    })
-    .then(resp => resp.json())
-    .then(data => {
-      setOtpSubmitting(false);
-      if (data.success) {
-        setOtpSent(true);
-        if (data.devCode) {
-          setOtpDevCode(data.devCode);
-        }
-      } else {
-        setOtpError(data.error || 'Failed to dispatch security code via SMTP pipeline.');
-      }
-    })
-    .catch(err => {
-      setOtpSubmitting(false);
-      setOtpError('System interface error communicating with active security backend.');
-      console.error(err);
     });
   };
 
@@ -394,7 +406,7 @@ export default function AdminPanel({
 
       {/* Nav Row Tab headers */}
       <div className="flex flex-wrap gap-1.5 border-b border-slate-100 pb-2">
-        {(['questions', 'ai_bulk', 'ocr_extract', 'csv', 'users', 'announcements', 'subjects'] as const).map(tab => (
+        {(['questions', 'ai_bulk', 'ocr_extract', 'csv', 'users', 'announcements', 'subjects', 'otp'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -1194,6 +1206,170 @@ export default function AdminPanel({
         </div>
       )}
 
+      {activeTab === 'otp' && (
+        <div id="admin-otp-tab" className="space-y-6 pt-4 animate-fadeIn text-xs max-w-lg font-sans">
+          <div className="space-y-2">
+            <h3 className="font-display font-bold text-slate-800 text-sm flex items-center gap-1.5">
+              <KeyRound className="text-indigo-600 w-4.5 h-4.5" />
+              Administrative Security OTP Vault
+            </h3>
+            <p className="text-3xs text-slate-500">
+              Access dynamic, single-use security authorization codes required to execute database modifications (banning accounts, deleting logs, awarding premium keys).
+            </p>
+          </div>
+
+          {!adminOtpGenerated ? (
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!adminPasswordInput.trim()) {
+                setAdminOtpError("Please input your administrator safety password.");
+                return;
+              }
+              setAdminOtpVerifying(true);
+              setAdminOtpError('');
+              setAdminOtpSuccessMsg('');
+
+              const activeAdminMail = adminEmail || 'admin@waecmaster.edu.ng';
+
+              try {
+                const resp = await fetch('/api/admin/generate-otp-with-password', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    email: activeAdminMail,
+                    password: adminPasswordInput.trim()
+                  })
+                });
+
+                const data = await resp.json();
+                setAdminOtpVerifying(false);
+
+                if (resp.ok && data.success) {
+                  setAdminOtpGenerated(data.code);
+                  setAdminOtpExpiresAt(data.expires);
+                  setAdminOtpTimeLeft(Math.max(0, Math.floor((data.expires - Date.now()) / 1000)));
+                  setAdminOtpSuccessMsg("One-Time Password generated successfully! Use it within 5 minutes.");
+                } else {
+                  setAdminOtpError(data.error || "MFA validation failed. Incorrect credentials.");
+                }
+              } catch (err) {
+                setAdminOtpVerifying(false);
+                setAdminOtpError("Network or server connection issue while verifying security credentials.");
+                console.error(err);
+              }
+            }} className="bg-white p-6 rounded-2xl border border-slate-150 space-y-4 shadow-xs">
+              <div className="flex items-center gap-3 text-amber-600 bg-amber-50/70 border border-amber-100 p-3 rounded-xl">
+                <Lock className="w-5 h-5 shrink-0" />
+                <p className="text-3xs text-amber-800 font-medium leading-relaxed">
+                  To safeguard candidate profiles and CBT roster records from rogue updates, you must verify your account password to authorize a temporary One-Time Password.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">
+                  Admin Account Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter your dashboard password"
+                  value={adminPasswordInput}
+                  onChange={(e) => {
+                    setAdminPasswordInput(e.target.value);
+                    if (adminOtpError) setAdminOtpError('');
+                  }}
+                  className="w-full bg-slate-50 border border-slate-205 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-xs focus:outline-hidden"
+                />
+              </div>
+
+              {adminOtpError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-150 text-rose-700 font-bold rounded-xl text-3xs animate-shake">
+                  ✕ {adminOtpError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={adminOtpVerifying || !adminPasswordInput.trim()}
+                className="w-full py-2.5 bg-slate-900 transition hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl font-bold cursor-pointer text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 border-none"
+              >
+                {adminOtpVerifying ? 'Authenticating...' : '🔐 Generate Secure OTP'}
+              </button>
+            </form>
+          ) : (
+            <div className="bg-white p-6 rounded-2xl border border-slate-150 space-y-5 shadow-xs text-center relative overflow-hidden animate-scaleUp">
+              <div className="absolute top-0 inset-x-0 h-1 bg-indigo-500"></div>
+
+              <div className="space-y-1.5 pt-2">
+                <span className="text-[10px] uppercase font-black text-rose-500 tracking-wider bg-rose-50 border border-rose-100 rounded-md px-2 py-0.5 inline-block">
+                  ACTIVE DEPLOYED OTP
+                </span>
+                <p className="text-3xs text-slate-400">
+                  This safety code is valid for <strong>one-time use only</strong>. Using it to authorize an action will destroy it immediately.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 inline-block mx-auto">
+                <div className="tracking-[0.8em] mr-[-0.8em] font-mono text-3xl font-black text-slate-900 select-all">
+                  {adminOtpGenerated}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="text-3xs text-slate-500 flex justify-center items-center gap-1">
+                  <span className="animate-ping w-1.5 h-1.5 rounded-full bg-rose-500 inline-block mr-1"></span>
+                  Expires in: <strong className="text-slate-800 font-extrabold">{Math.floor(adminOtpTimeLeft / 60).toString().padStart(2, '0')}:{(adminOtpTimeLeft % 60).toString().padStart(2, '0')}</strong>
+                </div>
+                
+                {/* Visual horizontal completion countdown tracker */}
+                <div className="w-full bg-slate-100 rounded-full h-1 max-w-[200px] mx-auto overflow-hidden">
+                  <div 
+                    className="bg-indigo-600 h-full transition-all duration-1000 ease-linear"
+                    style={{ width: `${(adminOtpTimeLeft / 300) * 105}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {adminOtpSuccessMsg && (
+                <div className="py-2 px-3 bg-emerald-50 border border-emerald-150 text-emerald-700 font-bold rounded-xl text-3xs max-w-sm mx-auto">
+                  ✓ {adminOtpSuccessMsg}
+                </div>
+              )}
+
+              <div className="pt-2.5 border-t border-slate-100 max-w-sm mx-auto flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Destroy immediately
+                    setAdminOtpGenerated(null);
+                    setAdminOtpExpiresAt(null);
+                    setAdminOtpTimeLeft(0);
+                    setAdminOtpSuccessMsg('');
+                  }}
+                  className="flex-1 py-2 text-3xs font-extrabold text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-slate-100 rounded-xl transition uppercase cursor-pointer border border-slate-200.5"
+                >
+                  Revoke OTP Code
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Force re-auth block to satisfy "immediately opened it requests password"
+                    setAdminOtpGenerated(null);
+                    setAdminOtpExpiresAt(null);
+                    setAdminOtpTimeLeft(0);
+                    setAdminOtpSuccessMsg('');
+                    setAdminPasswordInput('');
+                  }}
+                  className="flex-1 py-2 text-3xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition uppercase cursor-pointer border-none"
+                >
+                  Generate New Code
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {securityPendingAction && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-[200] p-4 text-xs font-sans">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-150 p-6 space-y-5 animate-scaleUp">
@@ -1213,7 +1389,7 @@ export default function AdminPanel({
             </div>
 
             <p className="text-slate-500 font-semibold leading-relaxed">
-              To complete this action, please enter the 4-digit safety authorization code sent to your admin email address: <strong className="text-slate-800 font-extrabold">{adminEmail || 'admin@waecmaster.edu.ng'}</strong>.
+              To complete this action, please enter the active 4-digit safety authorization code generated from your dynamic Admin <strong className="text-indigo-600 font-black">OTP tab</strong>.
             </p>
 
             <form onSubmit={(e) => {

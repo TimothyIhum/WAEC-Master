@@ -490,6 +490,73 @@ app.post("/api/admin/send-secure-code", async (req, res) => {
   }
 });
 
+app.post("/api/admin/generate-otp-with-password", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: "Please enter your administrator email and password." });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+
+  try {
+    let passwordHash: string | undefined;
+    let isAdmin = false;
+
+    if (pool) {
+      const result = await pool.query(`
+        SELECT password_hash as "password", is_admin as "isAdmin"
+        FROM users
+        WHERE LOWER(email) = LOWER($1)
+      `, [emailLower]);
+
+      if (result.rows.length > 0) {
+        passwordHash = result.rows[0].password;
+        isAdmin = Boolean(result.rows[0].isAdmin);
+      }
+    } else {
+      const userId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+      const docRef = fDoc(db, 'users', userId);
+      const docSnap = await fGetDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        passwordHash = data.password;
+        isAdmin = Boolean(data.isAdmin);
+      }
+    }
+
+    if (passwordHash === undefined) {
+      return res.status(404).json({ error: "No administrator registered with this email address in the database." });
+    }
+
+    if (!isAdmin) {
+      return res.status(403).json({ error: "Access Denied. Elevated administrator status is required to access CBT OTPs." });
+    }
+
+    if (passwordHash !== password) {
+      return res.status(401).json({ error: "Incorrect administrator password. Access denied." });
+    }
+
+    // Success! Let's generate a 4-digit code and save it
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    const expires = Date.now() + 5 * 60 * 1000; // lasts for 5 minutes
+
+    adminActionCodes.set(emailLower, { code, expires });
+    console.log(`\n==============================================\n[ADMIN SECURITY OTP GENERATION]\nADMINE EMAIL: ${emailLower}\nSECURITY CODE: ${code} (expires in 5 mins, single use)\n==============================================\n`);
+
+    res.json({
+      success: true,
+      code,
+      expires,
+      message: "One-Time Password successfully generated!"
+    });
+
+  } catch (err) {
+    console.error("Failed to generate OTP with password:", err);
+    res.status(500).json({ error: "Internal server error during credential validation." });
+  }
+});
+
 app.post("/api/admin/verify-secure-code", (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) {
