@@ -796,6 +796,98 @@ app.post("/api/discussions/:id/reply", async (req, res) => {
 });
 
 // NEW POSTGRES ENDPOINTS FOR DURABLE CLIENT SYNCHRONIZATION
+app.get("/api/users/profile", async (req, res) => {
+  const { email } = req.query;
+  if (!email) {
+    return res.status(400).json({ error: "Email query parameter is required." });
+  }
+  const emailLower = (email as string).toLowerCase().trim();
+
+  if (pool) {
+    try {
+      const result = await pool.query(`
+        SELECT id, username, email, password_hash as "password", avatar, xp, level, rank_tier as "rankTier", streak, accuracy, total_quizzes as "totalQuizzes", time_spent_minutes as "timeSpentMinutes", subjects_studied as "subjectsStudied", is_premium as "isPremium", is_admin as "isAdmin"
+        FROM users
+        WHERE LOWER(email) = LOWER($1)
+      `, [emailLower]);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: "User not found in Postgres database." });
+      }
+
+      const dbUser = result.rows[0];
+      let subjectsStudied = dbUser.subjectsStudied;
+      if (typeof subjectsStudied === "string") {
+        try {
+          subjectsStudied = JSON.parse(subjectsStudied);
+        } catch (e) {
+          subjectsStudied = {};
+        }
+      }
+
+      return res.json({
+        id: dbUser.id,
+        username: dbUser.username,
+        email: dbUser.email,
+        avatar: dbUser.avatar || '🎓',
+        level: Number(dbUser.level ?? 1),
+        xp: Number(dbUser.xp ?? 0),
+        rankTier: dbUser.rankTier || 'Bronze Scholar',
+        streak: Number(dbUser.streak ?? 1),
+        accuracy: Number(dbUser.accuracy ?? 100),
+        totalQuizzes: Number(dbUser.totalQuizzes ?? 0),
+        timeSpentMinutes: Number(dbUser.timeSpentMinutes ?? 0),
+        subjectsStudied: subjectsStudied || {},
+        isPremium: Boolean(dbUser.isPremium),
+        isAdmin: Boolean(dbUser.isAdmin)
+      });
+    } catch (err) {
+      console.error("Postgres profile fetch error:", err);
+    }
+  }
+
+  // Fallback to Firestore
+  try {
+    const userId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+    const docRef = fDoc(db, 'users', userId);
+    const docSnap = await fGetDoc(docRef);
+
+    if (!docSnap.exists()) {
+      return res.status(404).json({ error: "User not found in Firestore database." });
+    }
+
+    const fUser = docSnap.data();
+    let subjects = fUser.subjectsStudied;
+    if (typeof subjects === "string") {
+      try {
+        subjects = JSON.parse(subjects);
+      } catch (e) {
+        subjects = {};
+      }
+    }
+
+    return res.json({
+      id: docSnap.id,
+      username: fUser.username,
+      email: fUser.email,
+      avatar: fUser.avatar || '🎓',
+      level: Number(fUser.level ?? 1),
+      xp: Number(fUser.xp ?? 0),
+      rankTier: fUser.rankTier || 'Bronze Scholar',
+      streak: Number(fUser.streak ?? 1),
+      accuracy: Number(fUser.accuracy ?? 100),
+      totalQuizzes: Number(fUser.totalQuizzes ?? 0),
+      timeSpentMinutes: Number(fUser.timeSpentMinutes ?? 0),
+      subjectsStudied: subjects || {},
+      isPremium: Boolean(fUser.isPremium),
+      isAdmin: Boolean(fUser.isAdmin)
+    });
+  } catch (err) {
+    console.error("Direct Firestore profile fetch error:", err);
+    return res.status(500).json({ error: "Direct Firestore profile load failed" });
+  }
+});
+
 app.get("/api/users", async (req, res) => {
   if (pool) {
     try {

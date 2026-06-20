@@ -133,6 +133,48 @@ export default function App() {
       } catch (e) {
         console.error("Initial Firestore profiles sync failed:", e);
       }
+
+      // Re-validate and fetch freshest user session from database on load
+      const savedSession = localStorage.getItem('waec_user_session');
+      if (savedSession) {
+        try {
+          const parsed = JSON.parse(savedSession);
+          if (parsed && parsed.email) {
+            const emailLower = parsed.email.toLowerCase().trim();
+            const profileResp = await fetch(`/api/users/profile?email=${encodeURIComponent(emailLower)}`);
+            if (profileResp.ok) {
+              const liveUser = await profileResp.json();
+              if (liveUser && liveUser.email) {
+                const adminEmails = [
+                  'timothyihum@gmail.com',
+                  'temiokusami@gmail.com',
+                  'admin@waecmaster.edu.ng'
+                ];
+                if (adminEmails.includes(emailLower)) {
+                  liveUser.isAdmin = true;
+                  liveUser.isPremium = true;
+                  if ((liveUser.level || 0) < 30) {
+                    liveUser.level = 30;
+                    liveUser.xp = Math.max(liveUser.xp || 0, 9500);
+                    liveUser.rankTier = 'Diamond Legend';
+                  }
+                }
+                setUser(liveUser);
+                localStorage.setItem('waec_user_session', JSON.stringify(liveUser));
+              }
+            } else if (profileResp.status === 404) {
+              // Account was deleted from DB! Sign out immediately and clear state
+              console.warn("Active account was deleted from the database. Resetting session.");
+              setUser(null);
+              setShowLanding(true);
+              localStorage.removeItem('waec_user_session');
+            }
+          }
+        } catch (e) {
+          console.error("Failed to re-validate user session on page reload:", e);
+        }
+      }
+
       try {
         const cloudQs = await syncQuestionsFromDatabase();
         if (cloudQs && cloudQs.length > 0) {
