@@ -55,18 +55,6 @@ export default function AdminPanel({
   const [adminOtpError, setAdminOtpError] = useState('');
   const [adminOtpSuccessMsg, setAdminOtpSuccessMsg] = useState('');
 
-  // immediately on activeTab === 'otp' open, request for account password
-  useEffect(() => {
-    if (activeTab === 'otp') {
-      setAdminPasswordInput('');
-      setAdminOtpGenerated(null);
-      setAdminOtpExpiresAt(null);
-      setAdminOtpTimeLeft(0);
-      setAdminOtpError('');
-      setAdminOtpSuccessMsg('');
-    }
-  }, [activeTab]);
-
   // Countdown timer for generated OTP
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -1423,6 +1411,11 @@ export default function AdminPanel({
                   setSecurityPendingAction(null);
                   setOtpSent(false);
                   setOtpCode('');
+                  // Instantly discard the current generated OTP as it has been used once and rendered unusable
+                  setAdminOtpGenerated(null);
+                  setAdminOtpExpiresAt(null);
+                  setAdminOtpTimeLeft(0);
+                  setAdminOtpSuccessMsg('');
                 } else {
                   setOtpError(data.error || 'Incorrect or expired code. Access denied.');
                 }
