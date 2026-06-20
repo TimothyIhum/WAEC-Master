@@ -387,6 +387,137 @@ app.post("/api/auth/verify-code", createRateLimiterMiddleware("auth", 10), (req,
   res.json({ success: true, message: "Email code successfully verified!" });
 });
 
+// Admin OTP CBT security mechanisms store and endpoints
+const adminActionCodes = new Map<string, VerificationRecord>();
+
+const sendAdminVerificationEmail = async (toEmail: string, code: string, actionDesc: string): Promise<{ success: boolean; error?: string }> => {
+  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = parseInt(process.env.SMTP_PORT || "465");
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!user || !pass) {
+    return { success: false, error: "SMTP credentials (SMTP_USER and SMTP_PASS) are not set" };
+  }
+
+  try {
+    const isGmail = host.includes("gmail") || user.endsWith("@gmail.com");
+    let transporter;
+    
+    if (isGmail) {
+      transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: { user, pass }
+      });
+    } else {
+      transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        auth: { user, pass }
+      });
+    }
+
+    const fromAddress = process.env.SMTP_FROM || user;
+
+    await transporter.sendMail({
+      from: `"WAEC Master CBT Admin" <${fromAddress}>`,
+      to: toEmail,
+      subject: `[ADMIN ACTION SECURITY] Code: ${code} - Authorization Required`,
+      html: `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 500px; margin: 0 auto; padding: 28px; border: 1px solid #ef4444; border-radius: 20px; background-color: #ffffff; color: #1e293b; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-block; padding: 12px; background-color: #fef2f2; border-radius: 50%; margin-bottom: 12px;">
+              <span style="font-size: 32px;">🛡️</span>
+            </div>
+            <h2 style="margin: 0; color: #dc2626; font-size: 18px; font-weight: 800;">ADMIN SECURITY AUTHORIZATION</h2>
+            <p style="margin: 4px 0 0 0; font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Privileged Account Modification</p>
+          </div>
+          <p style="font-size: 13px; line-height: 1.6; color: #475569; margin: 0 0 16px 0;">
+            An edit action has been initiated on the CBT Administration Console. This requires multi-factor authorization to proceed.
+          </p>
+          <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 16px; margin: 16px 0; border-radius: 8px;">
+            <p style="margin: 0; font-size: 11px; font-weight: bold; color: #991b1b; text-transform: uppercase; letter-spacing: 0.5px;">Triggered Action:</p>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #b91c1c; font-family: monospace; font-weight: 600;">${actionDesc}</p>
+          </div>
+          <div style="text-align: center; margin: 24px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; font-weight: 700;">Your 4-Digit Security Code</p>
+            <span style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #0f172a; background-color: #f1f5f9; padding: 10px 24px; border-radius: 12px; border: 1px solid #e2e8f0; display: inline-block; font-family: monospace;">${code}</span>
+          </div>
+          <p style="font-size: 10px; text-align: center; color: #94a3b8; margin: 24px 0 0 0; border-top: 1px solid #f1f5f9; padding-top: 16px; line-height: 1.4;">
+            This security code is only valid for 15 minutes. If you did not trigger this action, please audit your administrative sessions immediately.
+          </p>
+        </div>
+      `
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("Failed to send admin verification email:", err);
+    return { success: false, error: err.message };
+  }
+};
+
+app.post("/api/admin/send-secure-code", async (req, res) => {
+  const { email, actionDescription } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: "Missing administrator email." });
+  }
+
+  const cleanEmail = email.toLowerCase().trim();
+  const code = Math.floor(1000 + Math.random() * 9000).toString();
+  const expires = Date.now() + 15 * 60 * 1000; // 15 mins validity for safety
+
+  adminActionCodes.set(cleanEmail, { code, expires });
+  console.log(`\n==============================================\n[ADMIN SECURITY SECURITY PORTAL]\nEMAIL: ${cleanEmail}\nACTION: ${actionDescription || 'N/A'}\nSECURITY CODE: ${code}\n==============================================\n`);
+
+  const sResult = await sendAdminVerificationEmail(cleanEmail, code, actionDescription || "Modifying user record");
+
+  if (sResult.success) {
+    res.json({
+      success: true,
+      emailSent: true,
+      message: "An administrative 4-digit safety code was sent to your Gmail inbox! Please check your inbox/spam folder."
+    });
+  } else {
+    res.json({
+      success: true,
+      emailSent: false,
+      devCode: code,
+      message: `Safety Code generated! (SMTP Not Set on Server - fallback code is: ${code})`,
+      error: sResult.error
+    });
+  }
+});
+
+app.post("/api/admin/verify-secure-code", (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ error: "Missing administrator email or action security code." });
+  }
+
+  const cleanEmail = email.toLowerCase().trim();
+  const cleanCode = code.trim();
+  const record = adminActionCodes.get(cleanEmail);
+
+  if (!record) {
+    return res.status(400).json({ error: "No security verification process is currently active for this administrator." });
+  }
+
+  if (Date.now() > record.expires) {
+    adminActionCodes.delete(cleanEmail);
+    return res.status(400).json({ error: "Administrative action code has expired. Please try the action again to generate a new code." });
+  }
+
+  if (record.code !== cleanCode) {
+    return res.status(400).json({ error: "Incorrect administrative authorization code. Access denied." });
+  }
+
+  // Success, purge
+  adminActionCodes.delete(cleanEmail);
+  res.json({ success: true, message: "Administrative action verified successfully!" });
+});
+
 // A real authentication endpoint pointing directly to the Neon Database
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;

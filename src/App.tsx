@@ -868,6 +868,7 @@ export default function App() {
                     subjectsList={subjectsList}
                     onAddSubject={handleAddSubject}
                     onDeleteSubject={handleDeleteSubject}
+                    adminEmail={user?.email}
                   />
                 </div>
               )}

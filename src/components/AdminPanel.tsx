@@ -16,6 +16,7 @@ interface AdminPanelProps {
   subjectsList: string[];
   onAddSubject: (subject: string) => void;
   onDeleteSubject: (subject: string) => void;
+  adminEmail?: string;
 }
 
 export default function AdminPanel({
@@ -25,9 +26,69 @@ export default function AdminPanel({
   onPostAnnouncement,
   subjectsList,
   onAddSubject,
-  onDeleteSubject
+  onDeleteSubject,
+  adminEmail
 }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<'questions' | 'ai_bulk' | 'ocr_extract' | 'csv' | 'users' | 'announcements' | 'subjects'>('questions');
+
+  // CBT operations authorization code states
+  const [securityPendingAction, setSecurityPendingAction] = useState<{
+    id: string; // e.g. "promote_admin", "toggle_premium", "ban_account", "boost_xp", "delete_user"
+    username: string; // the candidate being modified
+    onVerify: () => void; // callback function to execute on success
+    description: string; // descriptive line of the action
+  } | null>(null);
+
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [otpSubmitting, setOtpSubmitting] = useState(false);
+  const [otpDevCode, setOtpDevCode] = useState(''); // Dev fallback helper code
+
+  const requestSecurityVerification = (actionId: string, candidateUsername: string, description: string, executionCallback: () => void) => {
+    setOtpError('');
+    setOtpCode('');
+    setOtpSent(false);
+    setOtpDevCode('');
+    setOtpSubmitting(true);
+
+    const activeAdminMail = adminEmail || 'admin@waecmaster.edu.ng';
+
+    // Set pending action
+    setSecurityPendingAction({
+      id: actionId,
+      username: candidateUsername,
+      onVerify: executionCallback,
+      description
+    });
+
+    // Send the code to the backend
+    fetch('/api/admin/send-secure-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: activeAdminMail,
+        actionDescription: `${description} for user: ${candidateUsername}`
+      })
+    })
+    .then(resp => resp.json())
+    .then(data => {
+      setOtpSubmitting(false);
+      if (data.success) {
+        setOtpSent(true);
+        if (data.devCode) {
+          setOtpDevCode(data.devCode);
+        }
+      } else {
+        setOtpError(data.error || 'Failed to dispatch security code via SMTP pipeline.');
+      }
+    })
+    .catch(err => {
+      setOtpSubmitting(false);
+      setOtpError('System interface error communicating with active security backend.');
+      console.error(err);
+    });
+  };
 
   // New Question Form State
   const [newSub, setNewSub] = useState('Mathematics');
@@ -819,17 +880,26 @@ export default function AdminPanel({
                       <button
                         type="button"
                         onClick={() => {
-                          setCandidates(prev => prev.map(c => {
-                            if (c.username === selectedCandidate.username) {
-                              const updated = { ...c, isAdmin: !c.isAdmin };
-                              setSelectedCandidate(updated);
-                              saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
-                              return updated;
+                          const isPromoting = !selectedCandidate.isAdmin;
+                          const actionText = isPromoting ? "Promote user to Exam Admin" : "Revoke candidate Admin role";
+                          requestSecurityVerification(
+                            "toggle_admin",
+                            selectedCandidate.username,
+                            actionText,
+                            () => {
+                              setCandidates(prev => prev.map(c => {
+                                if (c.username === selectedCandidate.username) {
+                                  const updated = { ...c, isAdmin: !c.isAdmin };
+                                  setSelectedCandidate(updated);
+                                  saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
+                                  return updated;
+                                }
+                                return c;
+                              }));
+                              setMsg(`Administrative role updated for ${selectedCandidate.username}`);
+                              setTimeout(() => setMsg(''), 2500);
                             }
-                            return c;
-                          }));
-                          setMsg(`Administrative role updated for ${selectedCandidate.username}`);
-                          setTimeout(() => setMsg(''), 2500);
+                          );
                         }}
                         className={`py-2 px-3 border rounded-xl font-bold text-center transition cursor-pointer text-3xs uppercase tracking-wide ${selectedCandidate.isAdmin ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'}`}
                       >
@@ -839,17 +909,26 @@ export default function AdminPanel({
                       <button
                         type="button"
                         onClick={() => {
-                          setCandidates(prev => prev.map(c => {
-                            if (c.username === selectedCandidate.username) {
-                              const updated = { ...c, isPremium: !c.isPremium };
-                              setSelectedCandidate(updated);
-                              saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
-                              return updated;
+                          const isGranting = !selectedCandidate.isPremium;
+                          const actionText = isGranting ? "Grant Free Premium Upgrade" : "Revoke candidate Premium access";
+                          requestSecurityVerification(
+                            "toggle_premium",
+                            selectedCandidate.username,
+                            actionText,
+                            () => {
+                              setCandidates(prev => prev.map(c => {
+                                if (c.username === selectedCandidate.username) {
+                                  const updated = { ...c, isPremium: !c.isPremium };
+                                  setSelectedCandidate(updated);
+                                  saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
+                                  return updated;
+                                }
+                                return c;
+                              }));
+                              setMsg(`Premium status updated for ${selectedCandidate.username}`);
+                              setTimeout(() => setMsg(''), 2500);
                             }
-                            return c;
-                          }));
-                          setMsg(`Premium status updated for ${selectedCandidate.username}`);
-                          setTimeout(() => setMsg(''), 2500);
+                          );
                         }}
                         className={`py-2 px-3 border rounded-xl font-bold text-center transition cursor-pointer text-3xs uppercase tracking-wide ${selectedCandidate.isPremium ? 'bg-amber-500 text-white border-amber-500' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'}`}
                       >
@@ -863,19 +942,28 @@ export default function AdminPanel({
                         type="button"
                         onClick={() => {
                           const usr = selectedCandidate.username;
-                          toggleBanUser(usr);
-                          setCandidates(prev => prev.map(c => {
-                            if (c.username === usr) {
-                              const isNowBanned = !bannedUsers.includes(usr);
-                              const updated = { ...c, status: isNowBanned ? 'Banned' : 'Clean' };
-                              setSelectedCandidate(updated);
-                              saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
-                              return updated;
+                          const isBanning = !bannedUsers.includes(usr);
+                          const actionText = isBanning ? "Ban Candidate Account" : "Unban Candidate Account";
+                          requestSecurityVerification(
+                            "toggle_ban",
+                            usr,
+                            actionText,
+                            () => {
+                              toggleBanUser(usr);
+                              setCandidates(prev => prev.map(c => {
+                                if (c.username === usr) {
+                                  const isNowBanned = !bannedUsers.includes(usr);
+                                  const updated = { ...c, status: isNowBanned ? 'Banned' : 'Clean' };
+                                  setSelectedCandidate(updated);
+                                  saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
+                                  return updated;
+                                }
+                                return c;
+                              }));
+                              setMsg(`Updated ban status of ${usr}`);
+                              setTimeout(() => setMsg(''), 2500);
                             }
-                            return c;
-                          }));
-                          setMsg(`Updated ban status of ${usr}`);
-                          setTimeout(() => setMsg(''), 2500);
+                          );
                         }}
                         className={`flex-1 py-2 rounded-xl font-bold cursor-pointer transition text-3xs uppercase tracking-wide text-center ${bannedUsers.includes(selectedCandidate.username) ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-100'}`}
                       >
@@ -885,25 +973,29 @@ export default function AdminPanel({
                       <button
                         type="button"
                         onClick={() => {
-                          const booster = () => {
-                            setCandidates(prev => prev.map(c => {
-                              if (c.username === selectedCandidate.username) {
-                                const updated = {
-                                  ...c,
-                                  level: (c.level || 1) + 1,
-                                  timeSpentMinutes: (c.timeSpentMinutes || 0) + 60,
-                                  xp: (c.xp || 100) + 250
-                                };
-                                setSelectedCandidate(updated);
-                                saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
-                                return updated;
-                              }
-                              return c;
-                            }));
-                            setMsg(`Level and cumulative experience points boosted for ${selectedCandidate.username}!`);
-                            setTimeout(() => setMsg(''), 2500);
-                          };
-                          booster();
+                          requestSecurityVerification(
+                            "boost_xp",
+                            selectedCandidate.username,
+                            "Boost Cumulative Level and XP parameters",
+                            () => {
+                              setCandidates(prev => prev.map(c => {
+                                if (c.username === selectedCandidate.username) {
+                                  const updated = {
+                                    ...c,
+                                    level: (c.level || 1) + 1,
+                                    timeSpentMinutes: (c.timeSpentMinutes || 0) + 60,
+                                    xp: (c.xp || 100) + 250
+                                  };
+                                  setSelectedCandidate(updated);
+                                  saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
+                                  return updated;
+                                }
+                                return c;
+                              }));
+                              setMsg(`Level and cumulative experience points boosted for ${selectedCandidate.username}!`);
+                              setTimeout(() => setMsg(''), 2500);
+                            }
+                          );
                         }}
                         className="py-2 px-3 bg-slate-900 text-slate-50 hover:bg-slate-850 rounded-xl font-bold transition cursor-pointer flex items-center gap-1 text-3xs uppercase tracking-wide"
                         title="Boost level stats"
@@ -915,11 +1007,18 @@ export default function AdminPanel({
                         type="button"
                         onClick={() => {
                           if (confirm(`Are you sure you want to completely delete ${selectedCandidate.username}? This action is permanent.`)) {
-                            const remaining = candidates.filter(c => c.username !== selectedCandidate.username);
-                            setCandidates(remaining);
-                            setSelectedCandidate(remaining.length > 0 ? remaining[0] : null);
-                            setMsg('Account deleted from student rosters.');
-                            setTimeout(() => setMsg(''), 2500);
+                            requestSecurityVerification(
+                              "delete_user",
+                              selectedCandidate.username,
+                              "Completely Delete Candidate Profile from database roster",
+                              () => {
+                                const remaining = candidates.filter(c => c.username !== selectedCandidate.username);
+                                setCandidates(remaining);
+                                setSelectedCandidate(remaining.length > 0 ? remaining[0] : null);
+                                setMsg('Account deleted from student rosters.');
+                                setTimeout(() => setMsg(''), 2500);
+                              }
+                            );
                           }
                         }}
                         className="py-2 px-3.5 bg-red-600 hover:bg-red-700 text-white border border-red-500 rounded-xl font-bold transition cursor-pointer text-3xs uppercase tracking-wide"
@@ -1091,6 +1190,124 @@ export default function AdminPanel({
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {securityPendingAction && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-[200] p-4 text-xs font-sans">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-150 p-6 space-y-5 animate-scaleUp">
+            <div className="flex items-center gap-2.5 text-rose-600">
+              <ShieldAlert className="w-6 h-6 shrink-0" />
+              <div>
+                <h3 className="font-black text-slate-800 text-sm leading-tight">Admin MFA Authorization</h3>
+                <p className="text-[10px] text-rose-500 font-extrabold uppercase tracking-wider mt-0.5">High-Security Action Requested</p>
+              </div>
+            </div>
+
+            <div className="bg-rose-50 border border-rose-100/60 p-3.5 rounded-xl space-y-1.5 text-slate-700">
+              <p className="text-[10px] font-black text-rose-800 tracking-wider uppercase">Privileged Command:</p>
+              <p className="font-bold text-slate-800 font-mono tracking-tight bg-white border border-rose-100 rounded-lg p-2 text-3xs">
+                {securityPendingAction.description} ({securityPendingAction.username})
+              </p>
+            </div>
+
+            <p className="text-slate-500 font-semibold leading-relaxed">
+              To complete this action, please enter the 4-digit safety authorization code sent to your admin email address: <strong className="text-slate-800 font-extrabold">{adminEmail || 'admin@waecmaster.edu.ng'}</strong>.
+            </p>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (otpCode.trim().length !== 4) {
+                setOtpError("Please input a valid 4-digit verification code.");
+                return;
+              }
+              setOtpSubmitting(true);
+              setOtpError('');
+
+              const activeAdminMail = adminEmail || 'admin@waecmaster.edu.ng';
+
+              fetch('/api/admin/verify-secure-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: activeAdminMail,
+                  code: otpCode.trim()
+                })
+              })
+              .then(resp => resp.json())
+              .then(data => {
+                setOtpSubmitting(false);
+                if (data.success) {
+                  // SUCCESS! Execute the pending action
+                  securityPendingAction.onVerify();
+                  // Reset states
+                  setSecurityPendingAction(null);
+                  setOtpSent(false);
+                  setOtpCode('');
+                } else {
+                  setOtpError(data.error || 'Incorrect or expired code. Access denied.');
+                }
+              })
+              .catch(err => {
+                setOtpSubmitting(false);
+                setOtpError('Authorization check failed due to system connectivity issue.');
+                console.error(err);
+              });
+            }} className="space-y-4">
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <label className="block text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
+                    Enter Verification Code
+                  </label>
+                  {otpDevCode && (
+                    <span className="text-[9px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 font-mono">
+                      SMTP Fallback: {otpDevCode}
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  maxLength={4}
+                  required
+                  placeholder="e.g. 1234"
+                  value={otpCode}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setOtpCode(val);
+                    if (otpError) setOtpError('');
+                  }}
+                  className="w-full text-center tracking-[1.5em] font-mono font-black text-xl py-3 border border-slate-250 focus:border-indigo-500 rounded-xl bg-slate-50/50 focus:outline-hidden transition"
+                />
+              </div>
+
+              {otpError && (
+                <p className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-150 rounded-lg p-2.5">
+                  {otpError}
+                </p>
+              )}
+
+              <div className="flex gap-2.5 pt-1.5 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSecurityPendingAction(null);
+                    setOtpSent(false);
+                    setOtpCode('');
+                  }}
+                  className="flex-1 py-2.5 border border-slate-200.5 bg-slate-50 hover:bg-slate-100 rounded-xl font-bold transition text-3xs uppercase tracking-wide cursor-pointer"
+                >
+                  Cancel Action
+                </button>
+                <button
+                  type="submit"
+                  disabled={otpSubmitting || otpCode.length !== 4}
+                  className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl font-bold transition text-3xs uppercase tracking-wide cursor-pointer flex items-center justify-center gap-1 border-none"
+                >
+                  {otpSubmitting ? 'Verifying...' : 'Authorize Edit'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
