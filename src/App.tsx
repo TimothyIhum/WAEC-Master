@@ -16,6 +16,7 @@ import CommunityView from './components/CommunityView';
 import ParentDashboard from './components/ParentDashboard';
 import AdminPanel from './components/AdminPanel';
 import SecurityCenter from './components/SecurityCenter';
+import UserDashboardModal from './components/UserDashboardModal';
 
 // Static Data and Types
 import { Question, UserProgress, ParentCheckpoint, Announcement } from './types';
@@ -61,6 +62,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showUserDashboard, setShowUserDashboard] = useState(false);
 
   // Dynamic Subjects List (can be managed by Admin)
   const [subjectsList, setSubjectsList] = useState<string[]>(() => {
@@ -570,13 +572,17 @@ export default function App() {
               </div>
 
               {/* Student Profile widget block */}
-              <div className="bg-slate-50 p-4 border border-slate-100 rounded-2xl flex items-center gap-2.5 shadow-xs">
+              <button 
+                onClick={() => setShowUserDashboard(true)}
+                title="View Account Dashboard"
+                className="w-full bg-slate-50 hover:bg-indigo-50/50 p-4 border border-slate-100 hover:border-indigo-100 rounded-2xl flex items-center gap-2.5 shadow-xs text-left cursor-pointer transition border-solid"
+              >
                 <span className="text-2xl">{user.avatar}</span>
                 <div className="w-0 shrink grow">
                   <h4 className="font-extrabold text-slate-900 text-xs truncate leading-tight">{user.username}</h4>
                   <p className="text-[10px] text-indigo-600 font-extrabold">{user.isAdmin ? 'Exam Admin' : `Level ${user.level} Candidate`}</p>
                 </div>
-              </div>
+              </button>
 
               {/* Sidebar Links block */}
               <nav className="space-y-1">
@@ -736,7 +742,11 @@ export default function App() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setShowUserDashboard(true)}
+                title="Open Candidate Dashboard"
+                className="flex items-center gap-3.5 hover:bg-slate-100/80 p-1.5 px-3 rounded-2xl transition text-left cursor-pointer border-0 bg-transparent"
+              >
                 <div className="text-right">
                   <p className="text-xs font-black text-slate-900 leading-tight">{user.username}</p>
                   <p className="text-[10px] text-indigo-500 font-extrabold uppercase tracking-widest">{user.rankTier || 'Bronze Scholar'}</p>
@@ -744,7 +754,7 @@ export default function App() {
                 <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 border-2 border-white shadow-sm flex items-center justify-center text-xl font-bold font-sans shadow-xs select-none">
                   {user.avatar}
                 </div>
-              </div>
+              </button>
             </header>
 
             <div className="p-4 md:p-8 lg:p-10 max-w-7xl w-full mx-auto grow">
@@ -874,6 +884,16 @@ export default function App() {
           </main>
 
         </div>
+      )}
+      {showUserDashboard && (
+        <UserDashboardModal 
+          user={user}
+          onUpdateUser={(updated) => {
+            setUser(updated);
+            localStorage.setItem('waec_user_session', JSON.stringify(updated));
+          }}
+          onClose={() => setShowUserDashboard(false)}
+        />
       )}
     </div>
   );
