@@ -38,7 +38,7 @@ export default function CbtSimulator({
   const [selectedMode, setSelectedMode] = useState<ExamMode>('waec_simulation');
   const [selectedTopic, setSelectedTopic] = useState('');
   const [selectedYear, setSelectedYear] = useState<'all' | number>('all');
-  const [customCountSetting, setCustomCountSetting] = useState<'standard' | 'all_available' | 'official_exam' | number>('official_exam');
+  const [customCountSetting, setCustomCountSetting] = useState<'standard' | 'all_available' | 'official_exam' | number>('standard');
   const [customTimeSetting, setCustomTimeSetting] = useState<number | 'default'>('default');
   
   // Quiz running states
@@ -429,19 +429,6 @@ export default function CbtSimulator({
                 4. Select Number of Questions
               </label>
               <div className="flex flex-wrap gap-2">
-                {/* Official Exam Choice */}
-                <button
-                  type="button"
-                  onClick={() => setCustomCountSetting('official_exam')}
-                  className={`px-3 py-2 text-xs font-bold rounded-xl border transition cursor-pointer ${
-                    customCountSetting === 'official_exam' || customCountSetting === 'all_available'
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  🏫 Official Exam ({questionsList.filter(q => q.subject === selectedSubject && (selectedYear === 'all' || q.examYear === Number(selectedYear) || q.examYear === selectedYear)).length} Qs)
-                </button>
-
                 {/* Simulated Practice Choice */}
                 <button
                   type="button"
@@ -475,9 +462,7 @@ export default function CbtSimulator({
                 })}
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                {customCountSetting === 'official_exam' || customCountSetting === 'all_available'
-                  ? `Loads the official questions archived for ${selectedYear !== 'all' ? selectedYear : 'all years'} in your active study database (including custom uploaded ones).`
-                  : customCountSetting === 'standard'
+                {customCountSetting === 'standard'
                   ? "Fills and pads questions up to full national standards using questions from the study database."
                   : `Configures a custom rapid review session comprising exactly ${customCountSetting} questions.`}
               </p>
