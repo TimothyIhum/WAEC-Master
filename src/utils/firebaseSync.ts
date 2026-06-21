@@ -118,52 +118,30 @@ export const syncUsersFromFirestore = async (): Promise<void> => {
   }
   
   if (cloudUsers && cloudUsers.length > 0) {
-    // Fetch currently stored local storage users
-    const saved = localStorage.getItem('waec_registered_users');
-    let localUsers: any[] = [];
-    if (saved) {
-      try {
-        localUsers = JSON.parse(saved);
-      } catch (e) {
-        localUsers = [];
-      }
-    }
-    
-    // Merge: Any cloud user takes precedence, but don't drop passwords for local legacy users
-    cloudUsers.forEach((cloudUser: any) => {
-      const localIdx = localUsers.findIndex(
-        (lu) => lu.email.toLowerCase().trim() === cloudUser.email.toLowerCase().trim()
-      );
-      
-      if (localIdx !== -1) {
-        // Keep existing password since passwords aren't backed up in plaintext in raw public profiles
-        localUsers[localIdx] = {
-          ...localUsers[localIdx],
-          username: cloudUser.username,
-          password: cloudUser.password || localUsers[localIdx].password || 'admin',
-          avatar: cloudUser.avatar,
-          xp: cloudUser.xp,
-          level: cloudUser.level,
-          rankTier: cloudUser.rankTier || cloudUser.rank_tier,
-          streak: cloudUser.streak,
-          accuracy: cloudUser.accuracy,
-          totalQuizzes: cloudUser.totalQuizzes || cloudUser.totalQuizzesCount,
-          timeSpentMinutes: cloudUser.timeSpentMinutes,
-          subjectsStudied: cloudUser.subjectsStudied,
-          isPremium: cloudUser.isPremium,
-          isAdmin: cloudUser.isAdmin
-        };
-      } else {
-        // Create new local representation
-        localUsers.push({
-          ...cloudUser,
-          password: cloudUser.password || 'admin'
-        });
-      }
-    });
-    
-    localStorage.setItem('waec_registered_users', JSON.stringify(localUsers));
-    console.log(`Synchronized ${cloudUsers.length} profile records into local cache.`);
+    // Overwrite the local cache with the exact, current list from the cloud database.
+    // This filters out any local fallback seed dummy candidates (e.g., legacy King's College mock profiles)
+    // that do not actually exist in the DB.
+    const synchronizedUsers = cloudUsers.map((cloudUser: any) => ({
+      username: cloudUser.username || 'Candidate',
+      email: (cloudUser.email || '').toLowerCase().trim(),
+      password: cloudUser.password || 'admin',
+      avatar: cloudUser.avatar || '🎓',
+      level: Number(cloudUser.level ?? 1),
+      rankTier: cloudUser.rankTier || cloudUser.rank_tier || 'Bronze Scholar',
+      streak: Number(cloudUser.streak ?? 1),
+      accuracy: Number(cloudUser.accuracy ?? 100),
+      timeSpentMinutes: Number(cloudUser.timeSpentMinutes ?? 0),
+      totalQuizzes: Number(cloudUser.totalQuizzes ?? cloudUser.totalQuizzesCount ?? 0),
+      subjectsStudied: cloudUser.subjectsStudied || {},
+      isPremium: Boolean(cloudUser.isPremium ?? false),
+      isAdmin: Boolean(cloudUser.isAdmin ?? false),
+      status: cloudUser.status || 'Clean',
+      school: cloudUser.school || 'Unspecified CBT Affiliate College',
+      state: cloudUser.state || 'Lagos State Center'
+    }));
+
+    localStorage.setItem('waec_registered_users', JSON.stringify(synchronizedUsers));
+    console.log(`Successfully synchronized and refreshed ${synchronizedUsers.length} profile records into local cache, discarding untracked synthetic seed users.`);
   }
 };
 
