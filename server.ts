@@ -56,7 +56,8 @@ import {
   setDoc as fSetDoc, 
   updateDoc as fUpdateDoc, 
   query as fQuery, 
-  orderBy as fOrderBy 
+  orderBy as fOrderBy,
+  deleteDoc as fDeleteDoc
 } from "firebase/firestore";
 
 function loadFirebaseConfig() {
@@ -1188,6 +1189,45 @@ app.post("/api/users/sync", async (req, res) => {
   } catch (err) {
     console.error("Firestore sync fallback failed:", err);
     res.json({ success: true, message: "Locally synchronized successfully." });
+  }
+});
+
+app.post("/api/users/delete", async (req, res) => {
+  const { email, id } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: "Email is required to identify the user for deletion." });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+  const userId = id || `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+
+  // 1. Delete from PostgreSQL if pool is active
+  if (pool) {
+    try {
+      await pool.query("DELETE FROM users WHERE LOWER(email) = $1 OR id = $2", [emailLower, userId]);
+      console.log(`Deleted user ${emailLower} from Neon Postgres DB.`);
+    } catch (err) {
+      console.error("Failed to delete user from Neon Postgres DB:", err);
+    }
+  }
+
+  // 2. Delete from Firestore
+  try {
+    const docRef1 = fDoc(db, 'users', userId);
+    await fDeleteDoc(docRef1);
+
+    // Also try directly with legacy format formatted from email
+    const alternateId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+    if (alternateId !== userId) {
+      const docRef2 = fDoc(db, 'users', alternateId);
+      await fDeleteDoc(docRef2);
+    }
+
+    console.log(`Deleted user ${emailLower} from Cloud Firestore.`);
+    res.json({ success: true, message: `Candidate with email ${emailLower} has been permanently deleted from both Postgres and Firestore.` });
+  } catch (err) {
+    console.error("Firestore deletion failed:", err);
+    res.status(500).json({ error: "Failed to delete user from cloud synchronization fallback." });
   }
 });
 

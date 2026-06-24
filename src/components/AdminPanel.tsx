@@ -1012,10 +1012,30 @@ export default function AdminPanel({
                               selectedCandidate.username,
                               "Completely Delete Candidate Profile from database roster",
                               () => {
+                                // Hit the backend user deletion endpoint to permanently delete from Postgres/Firestore
+                                fetch('/api/users/delete', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    email: selectedCandidate.email,
+                                    id: selectedCandidate.id
+                                  })
+                                })
+                                .then((res) => {
+                                  if (res.ok) {
+                                    console.log("Successfully removed candidate from database.");
+                                  } else {
+                                    console.error("Backend candidate deletion reported failure.");
+                                  }
+                                })
+                                .catch(err => {
+                                  console.error("Network error during candidate deletion:", err);
+                                });
+
                                 const remaining = candidates.filter(c => c.username !== selectedCandidate.username);
                                 setCandidates(remaining);
                                 setSelectedCandidate(remaining.length > 0 ? remaining[0] : null);
-                                setMsg('Account deleted from student rosters.');
+                                setMsg('Account successfully deleted from database.');
                                 setTimeout(() => setMsg(''), 2500);
                               }
                             );
