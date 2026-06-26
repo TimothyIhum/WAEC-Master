@@ -560,76 +560,78 @@ export default function App() {
         <div className="flex grow relative">
           
           {/* DESKTOP SIDEBAR DRAWER */}
-          <aside className="hidden lg:flex flex-col w-64 bg-white text-slate-600 border-r border-slate-200 shrink-0 p-4 sticky top-0 h-screen max-h-screen overflow-y-auto z-50">
-            <div className="space-y-4 flex-1 pb-4">
-              {/* App Brand */}
-              <div className="px-2 flex items-center gap-3">
-                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-indigo-200">W</div>
-                <div>
-                  <h1 className="font-display font-black text-slate-900 text-base leading-none tracking-tight">WAEC Master</h1>
-                  <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-1">SSS Preps Startup</p>
+          <aside className="hidden lg:block w-64 bg-white text-slate-600 border-r border-slate-200 shrink-0 sticky top-0 h-[100dvh] max-h-screen overflow-y-auto z-50">
+            <div className="flex flex-col min-h-full p-4 justify-between gap-6">
+              <div className="space-y-4">
+                {/* App Brand */}
+                <div className="px-2 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-indigo-200">W</div>
+                  <div>
+                    <h1 className="font-display font-black text-slate-900 text-base leading-none tracking-tight">WAEC Master</h1>
+                    <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-1">SSS Preps Startup</p>
+                  </div>
                 </div>
-              </div>
 
-              {/* Student Profile widget block */}
-              <button 
-                onClick={() => setShowUserDashboard(true)}
-                title="View Account Dashboard"
-                className="w-full bg-slate-50 hover:bg-indigo-50/50 p-3.5 border border-slate-100 hover:border-indigo-100 rounded-2xl flex items-center gap-2.5 shadow-xs text-left cursor-pointer transition border-solid"
-              >
-                <span className="text-2xl">{user.avatar}</span>
-                <div className="w-0 shrink grow">
-                  <h4 className="font-extrabold text-slate-900 text-xs truncate leading-tight">{user.username}</h4>
-                  <p className="text-[10px] text-indigo-600 font-extrabold">{user.isAdmin ? 'Exam Admin' : `Level ${user.level} Candidate`}</p>
-                </div>
-              </button>
-
-              {/* Sidebar Links block */}
-              <nav className="space-y-1">
-                {NAVIGATION_DOCKS.filter(item => item.id !== 'admin' || user.isAdmin).map((item) => {
-                  const IconComp = item.icon;
-                  const isActive = activeTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        setActiveTab(item.id);
-                        setActiveQuestionForTutor(null);
-                      }}
-                      className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition flex items-center gap-3 cursor-pointer ${isActive ? 'bg-indigo-50 text-indigo-750 font-extrabold shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-                    >
-                      <IconComp className={`w-4 h-4 shrink-0 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </nav>
-
-              {/* Standalone Desktop Offline App promo card in sidepanel */}
-              <div id="offline-install-sidebar-card" className="bg-gradient-to-br from-slate-900 to-indigo-950 p-3.5 rounded-2xl text-white space-y-2 shadow-md border border-slate-800 animate-fadeIn">
-                <div className="flex items-center gap-1.5 font-bold text-xs">
-                  <span>💾</span> {t('Standalone Installer')}
-                </div>
-                <p className="text-[10px] text-slate-300 leading-normal">
-                  {t('Install the entire study suite as a standalone client to practice all subjects completely offline.')}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => downloadOfflineCbtApp(SAMPLE_QUESTIONS)}
-                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-2xs rounded-xl shadow-md transition flex justify-center items-center gap-1.5 cursor-pointer border-0"
+                {/* Student Profile widget block */}
+                <button 
+                  onClick={() => setShowUserDashboard(true)}
+                  title="View Account Dashboard"
+                  className="w-full bg-slate-50 hover:bg-indigo-50/50 p-3.5 border border-slate-100 hover:border-indigo-100 rounded-2xl flex items-center gap-2.5 shadow-xs text-left cursor-pointer transition border-solid"
                 >
-                  <Download className="w-3.5 h-3.5 text-white" /> {t('Get Standalone App')}
+                  <span className="text-2xl">{user.avatar}</span>
+                  <div className="w-0 shrink grow">
+                    <h4 className="font-extrabold text-slate-900 text-xs truncate leading-tight">{user.username}</h4>
+                    <p className="text-[10px] text-indigo-600 font-extrabold">{user.isAdmin ? 'Exam Admin' : `Level ${user.level} Candidate`}</p>
+                  </div>
                 </button>
-              </div>
-            </div>
 
-            {/* Logout actions */}
-            <button
-              onClick={handleLogOutGlobal}
-              className="py-2.5 px-3.5 bg-slate-50 hover:bg-red-50 rounded-xl text-xs font-bold text-slate-600 hover:text-red-650 hover:border-red-100 border border-slate-100 transition flex items-center gap-3 cursor-pointer mt-auto shrink-0 animate-fadeIn"
-            >
-              <LogOut className="w-4 h-4 text-slate-450 hover:text-red-500" /> {t('Log Out Account')}
-            </button>
+                {/* Sidebar Links block */}
+                <nav className="space-y-1">
+                  {NAVIGATION_DOCKS.filter(item => item.id !== 'admin' || user.isAdmin).map((item) => {
+                    const IconComp = item.icon;
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          setActiveQuestionForTutor(null);
+                        }}
+                        className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition flex items-center gap-3 cursor-pointer ${isActive ? 'bg-indigo-50 text-indigo-750 font-extrabold shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
+                      >
+                        <IconComp className={`w-4 h-4 shrink-0 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </nav>
+
+                {/* Standalone Desktop Offline App promo card in sidepanel */}
+                <div id="offline-install-sidebar-card" className="bg-gradient-to-br from-slate-900 to-indigo-950 p-3.5 rounded-2xl text-white space-y-2 shadow-md border border-slate-800 animate-fadeIn">
+                  <div className="flex items-center gap-1.5 font-bold text-xs">
+                    <span>💾</span> {t('Standalone Installer')}
+                  </div>
+                  <p className="text-[10px] text-slate-300 leading-normal">
+                    {t('Install the entire study suite as a standalone client to practice all subjects completely offline.')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => downloadOfflineCbtApp(SAMPLE_QUESTIONS)}
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-2xs rounded-xl shadow-md transition flex justify-center items-center gap-1.5 cursor-pointer border-0"
+                  >
+                    <Download className="w-3.5 h-3.5 text-white" /> {t('Get Standalone App')}
+                  </button>
+                </div>
+              </div>
+
+              {/* Logout actions */}
+              <button
+                onClick={handleLogOutGlobal}
+                className="py-2.5 px-3.5 bg-slate-50 hover:bg-red-50 rounded-xl text-xs font-bold text-slate-600 hover:text-red-650 hover:border-red-100 border border-slate-100 transition flex items-center gap-3 cursor-pointer shrink-0 animate-fadeIn"
+              >
+                <LogOut className="w-4 h-4 text-slate-450 hover:text-red-500" /> {t('Log Out Account')}
+              </button>
+            </div>
           </aside>
 
           {/* MOBILE NAVIGATION UPPER HEADER BAR */}
