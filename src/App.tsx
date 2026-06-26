@@ -560,7 +560,7 @@ export default function App() {
         <div className="flex grow relative">
           
           {/* DESKTOP SIDEBAR DRAWER */}
-          <aside className="hidden lg:flex flex-col w-64 bg-white text-slate-600 border-r border-slate-200 justify-between shrink-0 p-5 sticky top-0 h-screen z-50">
+          <aside className="hidden lg:flex flex-col w-64 bg-white text-slate-600 border-r border-slate-200 justify-between shrink-0 p-5 sticky top-0 h-screen overflow-y-auto z-50">
             <div className="space-y-8">
               {/* App Brand */}
               <div className="px-2 flex items-center gap-3">
@@ -660,7 +660,7 @@ export default function App() {
 
           {/* MOBILE SLIDE-OVER DRAWER MENU */}
           {mobileMenuOpen && (
-            <div className="lg:hidden fixed inset-0 top-16 bg-white/95 backdrop-blur-xs z-50 text-slate-800 p-6 space-y-6 flex flex-col justify-between shadow-lg">
+            <div className="lg:hidden fixed inset-0 top-16 bg-white/95 backdrop-blur-xs z-50 text-slate-800 p-6 space-y-6 flex flex-col justify-between shadow-lg overflow-y-auto">
               <div className="space-y-6">
                 <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
                   <span className="text-2xl">{user.avatar}</span>
