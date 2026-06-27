@@ -603,10 +603,10 @@ export default function CbtSimulator({
               <button
                 type="button"
                 onClick={() => setShowExitConfirm(true)}
-                className="flex items-center gap-1.5 px-3 py-1 bg-red-955/35 hover:bg-red-900/50 border border-red-900/30 text-red-400 text-xs font-bold rounded-full transition cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 bg-red-950/40 hover:bg-red-900/60 border border-red-900/30 text-red-300 text-xs font-bold rounded-full transition cursor-pointer"
                 title="Leave exam session"
               >
-                <LogOut className="w-3.5 h-3.5 text-red-400" /> Exit
+                <LogOut className="w-3.5 h-3.5 text-red-300" /> Exit
               </button>
             </div>
           </div>
@@ -848,18 +848,18 @@ export default function CbtSimulator({
               </p>
             </div>
 
-            <div className="flex flex-col gap-2 pt-2">
+            <div className="flex flex-col gap-2.5 pt-2">
               <button
                 type="button"
                 onClick={handleExitConfirmed}
-                className="w-full py-2.5 px-4 bg-red-650 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-md shadow-red-100"
+                className="w-full py-3 px-5 bg-red-400 hover:bg-red-500 text-[#333] font-extrabold rounded-xl text-xs transition cursor-pointer shadow-md shadow-red-100"
               >
                 Yes, exit session
               </button>
               <button
                 type="button"
                 onClick={() => setShowExitConfirm(false)}
-                className="w-full py-2 bg-transparent text-slate-500 hover:text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer border border-slate-200"
+                className="w-full py-3 px-5 bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-semibold rounded-xl text-xs transition cursor-pointer border border-slate-200"
               >
                 Cancel, keep practicing
               </button>

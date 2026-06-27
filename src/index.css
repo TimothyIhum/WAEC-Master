@@ -31,3 +31,11 @@ html {
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
 }
+
+/* Ensure standard interactive buttons have comfortable touch targets and padding */
+button:not([class*=" p-0"]):not([class*=" p-1"]):not([class*=" p-2"]):not([class*=" p-3"]):not([class^="p-"]):not([class*="w-4"]):not([class*="w-5"]):not([class*="w-6"]):not([class*="w-7"]):not([class*="w-8"]):not([class*="w-9"]):not([class*="w-10"]):not([class*="w-11"]):not([class*="w-12"]):not(.aspect-square) {
+  padding-top: max(0.65rem, 10px);
+  padding-bottom: max(0.65rem, 10px);
+  padding-left: max(1.25rem, 18px);
+  padding-right: max(1.25rem, 18px);
+}
