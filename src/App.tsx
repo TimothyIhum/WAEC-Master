@@ -921,14 +921,14 @@ export default function App() {
 
             {/* VIBRANT PALETTE DYNAMIC TOP HEADER */}
             <header className="hidden lg:flex h-20 px-8 items-center justify-between bg-white border-b border-slate-200 shrink-0 sticky top-0 z-30">
-              <div className="flex gap-4 items-center">
+              <div className="flex gap-3 items-center">
                 <div className="relative">
                   <button
                     type="button"
                     onClick={() =>
                       setDesktopSidebarViewMenuOpen((prev) => !prev)
                     }
-                    className="flex items-center gap-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 active:scale-95 text-slate-700 font-bold px-4 py-1.5 rounded-full select-none shadow-3xs cursor-pointer text-xs"
+                    className="flex h-10 items-center gap-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 active:scale-95 text-slate-700 font-bold px-4 rounded-full select-none shadow-3xs cursor-pointer text-xs"
                     title="Sidebar view options"
                   >
                     {isDesktopSidebarHidden ? (
@@ -984,7 +984,7 @@ export default function App() {
                 </div>
                 <button
                   onClick={toggleLanguage}
-                  className="flex items-center gap-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 active:scale-95 text-slate-700 font-bold px-4 py-1.5 rounded-full select-none shadow-3xs cursor-pointer text-xs"
+                  className="flex h-10 items-center gap-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 active:scale-95 text-slate-700 font-bold px-4 rounded-full select-none shadow-3xs cursor-pointer text-xs"
                   title="Cambia Lingua / Change Language"
                 >
                   <span className="text-sm">
@@ -992,13 +992,13 @@ export default function App() {
                   </span>
                   <span>{appLanguage === "en" ? "English" : "Italiano"}</span>
                 </button>
-                <div className="flex items-center gap-2 bg-rose-50 px-4 py-1.5 rounded-full select-none shadow-3xs">
+                <div className="flex h-10 items-center gap-2 bg-rose-50 px-4 rounded-full select-none shadow-3xs">
                   <span className="text-base">🔥</span>
                   <span className="font-bold text-rose-600 text-xs">
                     {user.streak} Day Streak
                   </span>
                 </div>
-                <div className="flex items-center gap-2 bg-indigo-50 px-4 py-1.5 rounded-full select-none shadow-3xs">
+                <div className="flex h-10 items-center gap-2 bg-indigo-50 px-4 rounded-full select-none shadow-3xs">
                   <span className="text-base">💎</span>
                   <span className="font-bold text-indigo-600 text-xs">
                     {user.xp.toLocaleString()} XP Cumulative
