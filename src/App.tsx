@@ -1031,14 +1031,9 @@ export default function App() {
                         🔥
                       </span>
                       {!hasPracticedToday && (
-                        <span className="relative -ml-1">
-                          <AlertTriangle
-                            className={`w-3.5 h-3.5 ${isAtRisk ? "text-amber-600" : "text-slate-400"}`}
-                          />
-                          <span className="absolute -top-1 -right-1 text-[9px] leading-none">
-                            ⁎
-                          </span>
-                        </span>
+                        <AlertTriangle
+                          className={`w-3.5 h-3.5 translate-y-1.5 ${isAtRisk ? "text-amber-600" : "text-slate-400"}`}
+                        />
                       )}
                       <span
                         className={`font-bold text-xs ${hasPracticedToday ? "text-rose-600" : isAtRisk ? "text-amber-700" : "text-slate-600"}`}
