@@ -58,21 +58,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.email) {
-          const emailLower = parsed.email.toLowerCase().trim();
-          const adminEmails = [
-            "timothyihum@gmail.com",
-            "temiokusami@gmail.com",
-            "admin@waecmaster.edu.ng",
-          ];
-          if (adminEmails.includes(emailLower)) {
-            parsed.isAdmin = true;
-            parsed.isPremium = true;
-            if ((parsed.level || 0) < 30) {
-              parsed.level = 30;
-              parsed.xp = Math.max(parsed.xp || 0, 9500);
-              parsed.rankTier = "Diamond Legend";
-            }
-          }
+          // No client-side hardcoded admin promotion.
         }
         return parsed;
       } catch (e) {
@@ -223,20 +209,7 @@ export default function App() {
             if (profileResp.ok) {
               const liveUser = await profileResp.json();
               if (liveUser && liveUser.email) {
-                const adminEmails = [
-                  "timothyihum@gmail.com",
-                  "temiokusami@gmail.com",
-                  "admin@waecmaster.edu.ng",
-                ];
-                if (adminEmails.includes(emailLower)) {
-                  liveUser.isAdmin = true;
-                  liveUser.isPremium = true;
-                  if ((liveUser.level || 0) < 30) {
-                    liveUser.level = 30;
-                    liveUser.xp = Math.max(liveUser.xp || 0, 9500);
-                    liveUser.rankTier = "Diamond Legend";
-                  }
-                }
+                // No client-side hardcoded admin promotion.
                 setUser(liveUser);
                 localStorage.setItem(
                   "waec_user_session",
@@ -441,25 +414,21 @@ export default function App() {
         email: dbUser.email,
       });
     } else {
-      // Fallback
-      const isAdm =
-        emailStr.toLowerCase().trim() === "timothyihum@gmail.com" ||
-        emailStr.toLowerCase().trim() === "temiokusami@gmail.com" ||
-        usernameStr.toLowerCase().trim() === "temiokusami";
+      // Fallback (should be rare; prefer backend profile)
       setUser({
         username: usernameStr,
         avatar: "🎓",
-        xp: isAdm ? 9500 : 150,
-        level: isAdm ? 30 : 1,
-        rankTier: isAdm ? "Diamond Legend" : "Bronze Scholar",
+        xp: 0,
+        level: 1,
+        rankTier: "Bronze Scholar",
         streak: 0,
         lastActiveDate: undefined,
-        accuracy: 100,
-        timeSpentMinutes: 30,
-        totalQuizzes: 1,
+        accuracy: 0,
+        timeSpentMinutes: 0,
+        totalQuizzes: 0,
         subjectsStudied: {},
-        isPremium: isAdm,
-        isAdmin: isAdm,
+        isPremium: false,
+        isAdmin: false,
         email: emailStr,
       });
     }
@@ -1030,16 +999,16 @@ export default function App() {
                       >
                         🔥
                       </span>
-                      {!hasPracticedToday && (
-                        <AlertTriangle
-                          className={`w-3.5 h-3.5 translate-y-1.5 ${isAtRisk ? "text-amber-600" : "text-slate-400"}`}
-                        />
-                      )}
                       <span
                         className={`font-bold text-xs ${hasPracticedToday ? "text-rose-600" : isAtRisk ? "text-amber-700" : "text-slate-600"}`}
                       >
                         {user.streak} Day Streak
                       </span>
+                      {!hasPracticedToday && (
+                        <AlertTriangle
+                          className={`w-3.5 h-3.5 translate-y-1.5 -ml-1 ${isAtRisk ? "text-amber-600" : "text-slate-400"}`}
+                        />
+                      )}
                     </div>
                   );
                 })()}

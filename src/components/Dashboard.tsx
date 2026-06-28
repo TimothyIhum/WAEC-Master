@@ -227,84 +227,22 @@ export default function Dashboard({
             <h3 className="font-display font-extrabold text-slate-800 text-sm">
               Recommended Topics for You
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-3 text-lg">
-                  🧪
-                </div>
-                <p className="font-bold text-xs text-slate-900">
-                  Organic Chemistry
-                </p>
-                <p className="text-[10px] text-slate-400 font-medium">
-                  Mastery Check: 42%
-                </p>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-3 text-lg">
-                  📈
-                </div>
-                <p className="font-bold text-xs text-slate-900">
-                  Coordinate Geometry
-                </p>
-                <p className="text-[10px] text-slate-400 font-medium">
-                  Mastery Check: 89%
-                </p>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center mb-3 text-lg">
-                  ⚙️
-                </div>
-                <p className="font-bold text-xs text-slate-900">
-                  Rotational Dynamics
-                </p>
-                <p className="text-[10px] text-slate-400 font-medium">
-                  Mastery Check: 65%
-                </p>
-              </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-xs text-slate-500">
+              No recommendations yet. Complete CBT practice to unlock
+              personalised topics.
             </div>
           </section>
 
           {/* ACTIVE TOURNAMENTS UPDATE CARD */}
-          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
+          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-2">
             <h4 className="font-display font-bold text-slate-900 text-sm">
               Upcoming National Tournaments
             </h4>
-
-            <div className="space-y-3">
-              {[
-                {
-                  title: "West African Physics League Cup 🏆",
-                  date: "This Saturday, 15:00 UTC",
-                  reward: "300 XP + Gold Medal",
-                },
-                {
-                  title: "Calculus Rapid Speed Trial ⚡",
-                  date: "Sunday, 12:30 UTC",
-                  reward: "150 XP",
-                },
-              ].map((trn, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center gap-4 hover:border-indigo-100 transition-all"
-                >
-                  <div className="space-y-1">
-                    <h5 className="font-extrabold text-slate-900 text-xs">
-                      {trn.title}
-                    </h5>
-                    <p className="text-3xs text-slate-400 block">{trn.date}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-2xs font-bold text-indigo-900 bg-indigo-50 px-2.5 py-1 rounded-md">
-                      {trn.reward}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <p className="text-xs text-slate-500">No tournaments scheduled.</p>
           </div>
 
           {/* STUDY ACTIVITY LOG GRAPH */}
-          <section className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+          <section className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-2">
             <div className="flex justify-between items-center">
               <h2 className="font-bold text-slate-800 text-sm">
                 Study Activity Log
@@ -313,49 +251,9 @@ export default function Dashboard({
                 Past 7 Days
               </span>
             </div>
-            <div className="flex items-end justify-between h-24 gap-2 pt-2">
-              <div
-                className="flex-1 bg-slate-100 h-[20%] rounded-t-md hover:bg-slate-200 transition-colors cursor-pointer"
-                title="Mon: 15m"
-              ></div>
-              <div
-                className="flex-1 bg-slate-100 h-[45%] rounded-t-md hover:bg-slate-200 transition-colors cursor-pointer"
-                title="Tue: 35m"
-              ></div>
-              <div
-                className="flex-1 bg-indigo-400 h-[80%] rounded-t-md hover:bg-indigo-500 transition-colors cursor-pointer"
-                title="Wed: 65m"
-              ></div>
-              <div
-                className="flex-1 bg-slate-100 h-[30%] rounded-t-md hover:bg-slate-200 transition-colors cursor-pointer"
-                title="Thu: 22m"
-              ></div>
-              <div
-                className="flex-1 bg-slate-100 h-[60%] rounded-t-md hover:bg-slate-200 transition-colors cursor-pointer"
-                title="Fri: 48m"
-              ></div>
-              <div
-                className="flex-1 bg-indigo-600 h-[92%] rounded-t-md relative hover:bg-indigo-700 transition-colors cursor-pointer"
-                title="Sat: Peak 90m"
-              >
-                <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] font-bold text-indigo-600 font-mono">
-                  MAX
-                </div>
-              </div>
-              <div
-                className="flex-1 bg-slate-100 h-[40%] rounded-t-md hover:bg-slate-200 transition-colors cursor-pointer"
-                title="Sun: 30m"
-              ></div>
-            </div>
-            <div className="flex justify-between text-4xs font-bold text-slate-400 font-mono tracking-widest pt-1 px-1">
-              <span>MON</span>
-              <span>TUE</span>
-              <span>WED</span>
-              <span>THU</span>
-              <span>FRI</span>
-              <span>SAT</span>
-              <span>SUN</span>
-            </div>
+            <p className="text-xs text-slate-500">
+              No activity yet. Start a CBT practice to begin tracking.
+            </p>
           </section>
         </div>
 
