@@ -179,100 +179,12 @@ export default function AdminPanel({
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       } catch (e) {
         console.error("Failed to parse candidates:", e);
       }
     }
-    // Fallback seed
-    const defaultData = [
-      {
-        username: "Ihum Triumph",
-        email: "timothyihum@gmail.com",
-        avatar: "🦁",
-        level: 35,
-        rankTier: "Diamond Legend",
-        streak: 15,
-        accuracy: 96,
-        timeSpentMinutes: 1240,
-        totalQuizzes: 28,
-        status: "Clean",
-        school: "King's College, Lagos",
-        state: "Lagos",
-        subjectsStudied: {
-          Mathematics: 640,
-          "English Language": 585,
-          Physics: 240,
-        },
-        isAdmin: true,
-        isPremium: true,
-      },
-      {
-        username: "Ihum Temitope",
-        email: "temiokusami@gmail.com",
-        avatar: "👑",
-        level: 35,
-        rankTier: "Diamond Legend",
-        streak: 15,
-        accuracy: 96,
-        timeSpentMinutes: 1240,
-        totalQuizzes: 28,
-        status: "Clean",
-        school: "King's College, Lagos",
-        state: "Lagos",
-        subjectsStudied: {
-          Mathematics: 640,
-          "English Language": 585,
-          Physics: 240,
-        },
-        isAdmin: true,
-        isPremium: true,
-      },
-      {
-        username: "Ihum Temitope",
-        email: "temitope@waecmaster.edu.ng",
-        avatar: "👧",
-        level: 35,
-        rankTier: "Diamond Legend",
-        streak: 15,
-        accuracy: 96,
-        timeSpentMinutes: 1240,
-        totalQuizzes: 28,
-        status: "Clean",
-        school: "King's College, Lagos",
-        state: "Lagos",
-        subjectsStudied: {
-          Mathematics: 640,
-          "English Language": 585,
-          Physics: 240,
-        },
-        isAdmin: true,
-        isPremium: true,
-      },
-      {
-        username: "Ihum Triumph",
-        email: "triumph@waecmaster.edu.ng",
-        avatar: "👦",
-        level: 35,
-        rankTier: "Diamond Legend",
-        streak: 15,
-        accuracy: 96,
-        timeSpentMinutes: 1240,
-        totalQuizzes: 28,
-        status: "Clean",
-        school: "King's College, Lagos",
-        state: "Lagos",
-        subjectsStudied: {
-          Mathematics: 640,
-          "English Language": 585,
-          Physics: 240,
-        },
-        isAdmin: true,
-        isPremium: true,
-      },
-    ];
-    localStorage.setItem("waec_registered_users", JSON.stringify(defaultData));
-    return defaultData;
+    return [];
   });
 
   const buildPaperMetadata = (

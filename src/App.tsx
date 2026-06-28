@@ -18,6 +18,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
+  AlertTriangle,
 } from "lucide-react";
 
 // Subcomponents
@@ -323,25 +324,8 @@ export default function App() {
   // Dynamic lists (mutated by Admin) - database is the source of truth
   const [questionsList, setQuestionsList] = useState<Question[]>([]);
 
-  // Dynamic Announcements list
-  const [announcements, setAnnouncements] = useState<Announcement[]>([
-    {
-      id: "ann-1",
-      title: "WAEC Timetable Update 📅",
-      content:
-        "General Mathematics Mock starts nationwide this Friday. Use CBT simulation mode to test your speed!",
-      category: "Exam Update",
-      timestamp: new Date().toISOString(),
-    },
-    {
-      id: "ann-2",
-      title: "Diamond Tier Scholar Tournament Winner 👑",
-      content:
-        "Congratulations to Kofi_Accra for scoring 100% on the English Lexis Challenge with a average response of 4 seconds!",
-      category: "Tournament",
-      timestamp: new Date().toISOString(),
-    },
-  ]);
+  // Dynamic Announcements list (no mock seed)
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   // Parent configuration
   const [parentConfig, setParentConfig] = useState<ParentCheckpoint>({
@@ -366,16 +350,15 @@ export default function App() {
       setUser({
         username: usernameStr,
         avatar: "🦊",
-        xp: 150,
+        xp: 0,
         level: 1,
         rankTier: "Bronze Scholar",
-        streak: 1,
-        accuracy: 75,
-        timeSpentMinutes: 10,
-        totalQuizzes: 1,
-        subjectsStudied: {
-          Mathematics: 40,
-        },
+        streak: 0,
+        lastActiveDate: undefined,
+        accuracy: 0,
+        timeSpentMinutes: 0,
+        totalQuizzes: 0,
+        subjectsStudied: {},
         isPremium: false,
         isAdmin: false,
         email: "guest@waecmaster.edu.ng",
@@ -392,7 +375,8 @@ export default function App() {
         xp: Number(fullProfile.xp ?? 100),
         level: Number(fullProfile.level ?? 1),
         rankTier: fullProfile.rankTier || "Bronze Scholar",
-        streak: Number(fullProfile.streak ?? 1),
+        streak: Number(fullProfile.streak ?? 0),
+        lastActiveDate: fullProfile.lastActiveDate,
         accuracy: Number(fullProfile.accuracy ?? 100),
         timeSpentMinutes: Number(fullProfile.timeSpentMinutes ?? 0),
         totalQuizzes: Number(fullProfile.totalQuizzes ?? 0),
@@ -446,7 +430,8 @@ export default function App() {
         xp: dbUser.xp ?? 100,
         level: dbUser.level ?? 1,
         rankTier: dbUser.rankTier ?? "Bronze Scholar",
-        streak: dbUser.streak ?? 1,
+        streak: dbUser.streak ?? 0,
+        lastActiveDate: dbUser.lastActiveDate,
         accuracy: dbUser.accuracy ?? 100,
         timeSpentMinutes: dbUser.timeSpentMinutes ?? 0,
         totalQuizzes: dbUser.totalQuizzes ?? 0,
@@ -467,7 +452,8 @@ export default function App() {
         xp: isAdm ? 9500 : 150,
         level: isAdm ? 30 : 1,
         rankTier: isAdm ? "Diamond Legend" : "Bronze Scholar",
-        streak: 1,
+        streak: 0,
+        lastActiveDate: undefined,
         accuracy: 100,
         timeSpentMinutes: 30,
         totalQuizzes: 1,
@@ -535,21 +521,41 @@ export default function App() {
     else if (newXp >= 1000) newTier = "Gold Champion";
     else if (newXp >= 500) newTier = "Silver Competitor";
 
+    const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD (local)
+
     setUser((prev) => {
       if (!prev) return null;
+
+      const last = prev.lastActiveDate;
+
+      let nextStreak = prev.streak;
+      if (last !== todayStr) {
+        // If user practiced yesterday, continue streak; otherwise restart to 1.
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toLocaleDateString("en-CA");
+
+        if (last === yesterdayStr) nextStreak = prev.streak + 1;
+        else nextStreak = 1;
+      }
+
       return {
         ...prev,
         xp: newXp,
         level: newLevel,
         rankTier: newTier,
-        streak: prev.streak + 1, // Gain streak count for daily revision submission
+        streak: nextStreak,
+        lastActiveDate: todayStr,
         totalQuizzes: prev.totalQuizzes + 1,
         timeSpentMinutes: prev.timeSpentMinutes + timeSpentMin,
-        accuracy: Math.round(
-          (prev.accuracy * prev.totalQuizzes +
-            (correctCount / totalCount) * 100) /
-            (prev.totalQuizzes + 1),
-        ),
+        accuracy:
+          prev.totalQuizzes + 1 > 0
+            ? Math.round(
+                (prev.accuracy * prev.totalQuizzes +
+                  (correctCount / totalCount) * 100) /
+                  (prev.totalQuizzes + 1),
+              )
+            : Math.round((correctCount / totalCount) * 100),
       };
     });
 
@@ -992,12 +998,40 @@ export default function App() {
                   </span>
                   <span>{appLanguage === "en" ? "English" : "Italiano"}</span>
                 </button>
-                <div className="flex h-10 items-center gap-2 bg-rose-50 px-4 rounded-full select-none shadow-3xs">
-                  <span className="text-base">🔥</span>
-                  <span className="font-bold text-rose-600 text-xs">
-                    {user.streak} Day Streak
-                  </span>
-                </div>
+                {(() => {
+                  const todayStr = new Date().toLocaleDateString("en-CA");
+                  const hasPracticedToday = user.lastActiveDate === todayStr;
+                  const isAtRisk = !hasPracticedToday && user.streak > 0;
+
+                  return (
+                    <div
+                      className={`flex h-10 items-center gap-2 px-4 rounded-full select-none shadow-3xs ${hasPracticedToday ? "bg-rose-50" : "bg-slate-100"}`}
+                      title={
+                        isAtRisk
+                          ? "Streak at risk — practice CBT today to keep it"
+                          : hasPracticedToday
+                            ? "Streak protected for today"
+                            : "Practice CBT today to start your streak"
+                      }
+                    >
+                      <span
+                        className={`text-base ${hasPracticedToday ? "" : "opacity-40"}`}
+                      >
+                        🔥
+                      </span>
+                      {!hasPracticedToday && (
+                        <AlertTriangle
+                          className={`w-4 h-4 ${isAtRisk ? "text-amber-600" : "text-slate-400"}`}
+                        />
+                      )}
+                      <span
+                        className={`font-bold text-xs ${hasPracticedToday ? "text-rose-600" : isAtRisk ? "text-amber-700" : "text-slate-600"}`}
+                      >
+                        {user.streak} Day Streak
+                      </span>
+                    </div>
+                  );
+                })()}
                 <div className="flex h-10 items-center gap-2 bg-indigo-50 px-4 rounded-full select-none shadow-3xs">
                   <span className="text-base">💎</span>
                   <span className="font-bold text-indigo-600 text-xs">
