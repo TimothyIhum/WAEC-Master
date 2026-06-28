@@ -528,14 +528,25 @@ export default function App() {
 
       const last = prev.lastActiveDate;
 
-      let nextStreak = prev.streak;
+      // If the user missed a day already (last practice date isn't today or yesterday),
+      // the current streak should be treated as broken (0) until they practice again.
+      let baseStreak = prev.streak;
+      if (last) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toLocaleDateString("en-CA");
+        const isStreakBroken = last !== todayStr && last !== yesterdayStr;
+        if (isStreakBroken) baseStreak = 0;
+      }
+
+      let nextStreak = baseStreak;
       if (last !== todayStr) {
-        // If user practiced yesterday, continue streak; otherwise restart to 1.
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayStr = yesterday.toLocaleDateString("en-CA");
 
-        if (last === yesterdayStr) nextStreak = prev.streak + 1;
+        if (last === yesterdayStr && baseStreak > 0)
+          nextStreak = baseStreak + 1;
         else nextStreak = 1;
       }
 
@@ -1020,9 +1031,14 @@ export default function App() {
                         🔥
                       </span>
                       {!hasPracticedToday && (
-                        <AlertTriangle
-                          className={`w-4 h-4 ${isAtRisk ? "text-amber-600" : "text-slate-400"}`}
-                        />
+                        <span className="relative -ml-1">
+                          <AlertTriangle
+                            className={`w-3.5 h-3.5 ${isAtRisk ? "text-amber-600" : "text-slate-400"}`}
+                          />
+                          <span className="absolute -top-1 -right-1 text-[9px] leading-none">
+                            ⁎
+                          </span>
+                        </span>
                       )}
                       <span
                         className={`font-bold text-xs ${hasPracticedToday ? "text-rose-600" : isAtRisk ? "text-amber-700" : "text-slate-600"}`}
