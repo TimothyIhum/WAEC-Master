@@ -1006,7 +1006,7 @@ export default function App() {
                       </span>
                       {!hasPracticedToday && (
                         <AlertTriangle
-                          className={`w-3.5 h-3.5 translate-y-1.5 -ml-1 ${isAtRisk ? "text-amber-600" : "text-slate-400"}`}
+                          className={`w-4 h-4 ${isAtRisk ? "text-amber-600" : "text-slate-400"}`}
                         />
                       )}
                     </div>
