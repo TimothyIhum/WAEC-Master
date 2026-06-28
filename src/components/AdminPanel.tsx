@@ -1,19 +1,38 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Database, Plus, ShieldCheck, Mail, Sliders, ChevronDown, CheckCircle, 
-  Trash2, Sparkles, Upload, RefreshCw, AlertTriangle, Send, Book, ShieldAlert,
-  Lock, KeyRound, QrCode
-} from 'lucide-react';
-import { Question, Announcement } from '../types';
-import { SUBJECTS_LIST } from '../data/questions';
-import OcrExtractorTab from './OcrExtractorTab';
-import { saveUserToFirestore } from '../utils/firebaseSync';
+import React, { useState, useEffect } from "react";
+import {
+  Database,
+  Plus,
+  ShieldCheck,
+  Mail,
+  Sliders,
+  ChevronDown,
+  CheckCircle,
+  Trash2,
+  Sparkles,
+  Upload,
+  RefreshCw,
+  AlertTriangle,
+  Send,
+  Book,
+  ShieldAlert,
+  Lock,
+  KeyRound,
+  QrCode,
+} from "lucide-react";
+import { Question, Announcement } from "../types";
+import { SUBJECTS_LIST } from "../data/questions";
+import OcrExtractorTab from "./OcrExtractorTab";
+import { saveUserToFirestore } from "../utils/firebaseSync";
 
 interface AdminPanelProps {
   questionsList: Question[];
   onAddQuestion: (q: Question) => void;
   onDeleteQuestion: (qId: string) => void;
-  onPostAnnouncement: (ann: { title: string; content: string; category: any }) => void;
+  onPostAnnouncement: (ann: {
+    title: string;
+    content: string;
+    category: any;
+  }) => void;
   subjectsList: string[];
   onAddSubject: (subject: string) => void;
   onDeleteSubject: (subject: string) => void;
@@ -28,9 +47,18 @@ export default function AdminPanel({
   subjectsList,
   onAddSubject,
   onDeleteSubject,
-  adminEmail
+  adminEmail,
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'questions' | 'ai_bulk' | 'ocr_extract' | 'csv' | 'users' | 'announcements' | 'subjects' | 'otp'>('questions');
+  const [activeTab, setActiveTab] = useState<
+    | "questions"
+    | "ai_bulk"
+    | "ocr_extract"
+    | "csv"
+    | "users"
+    | "announcements"
+    | "subjects"
+    | "otp"
+  >("questions");
 
   // CBT operations authorization code states
   const [securityPendingAction, setSecurityPendingAction] = useState<{
@@ -41,31 +69,38 @@ export default function AdminPanel({
   } | null>(null);
 
   const [otpSent, setOtpSent] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpError, setOtpError] = useState('');
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState("");
   const [otpSubmitting, setOtpSubmitting] = useState(false);
-  const [otpDevCode, setOtpDevCode] = useState(''); // Dev fallback helper code
+  const [otpDevCode, setOtpDevCode] = useState(""); // Dev fallback helper code
 
   // Admin dynamic OTP states
-  const [adminPasswordInput, setAdminPasswordInput] = useState('');
-  const [adminOtpGenerated, setAdminOtpGenerated] = useState<string | null>(null);
-  const [adminOtpExpiresAt, setAdminOtpExpiresAt] = useState<number | null>(null);
+  const [adminPasswordInput, setAdminPasswordInput] = useState("");
+  const [adminOtpGenerated, setAdminOtpGenerated] = useState<string | null>(
+    null,
+  );
+  const [adminOtpExpiresAt, setAdminOtpExpiresAt] = useState<number | null>(
+    null,
+  );
   const [adminOtpTimeLeft, setAdminOtpTimeLeft] = useState<number>(0); // in seconds
   const [adminOtpVerifying, setAdminOtpVerifying] = useState(false);
-  const [adminOtpError, setAdminOtpError] = useState('');
-  const [adminOtpSuccessMsg, setAdminOtpSuccessMsg] = useState('');
+  const [adminOtpError, setAdminOtpError] = useState("");
+  const [adminOtpSuccessMsg, setAdminOtpSuccessMsg] = useState("");
 
   // Countdown timer for generated OTP
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (adminOtpGenerated && adminOtpExpiresAt) {
       interval = setInterval(() => {
-        const remaining = Math.max(0, Math.floor((adminOtpExpiresAt - Date.now()) / 1000));
+        const remaining = Math.max(
+          0,
+          Math.floor((adminOtpExpiresAt - Date.now()) / 1000),
+        );
         setAdminOtpTimeLeft(remaining);
         if (remaining <= 0) {
           setAdminOtpGenerated(null);
           setAdminOtpExpiresAt(null);
-          setAdminOtpSuccessMsg('');
+          setAdminOtpSuccessMsg("");
         }
       }, 1000);
     }
@@ -74,11 +109,16 @@ export default function AdminPanel({
     };
   }, [adminOtpGenerated, adminOtpExpiresAt]);
 
-  const requestSecurityVerification = (actionId: string, candidateUsername: string, description: string, executionCallback: () => void) => {
-    setOtpError('');
-    setOtpCode('');
-    setOtpSent(true); 
-    setOtpDevCode('');
+  const requestSecurityVerification = (
+    actionId: string,
+    candidateUsername: string,
+    description: string,
+    executionCallback: () => void,
+  ) => {
+    setOtpError("");
+    setOtpCode("");
+    setOtpSent(true);
+    setOtpDevCode("");
     setOtpSubmitting(false);
 
     // Set pending action
@@ -86,193 +126,238 @@ export default function AdminPanel({
       id: actionId,
       username: candidateUsername,
       onVerify: executionCallback,
-      description
+      description,
     });
   };
 
   // New Question Form State
-  const [newSub, setNewSub] = useState('Mathematics');
-  const [newTopic, setNewTopic] = useState('Calculus');
-  const [newDiff, setNewDiff] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
-  const [newType, setNewType] = useState<'mcq' | 'fill_in_the_blank'>('mcq');
-  const [newText, setNewText] = useState('');
-  const [opt0, setOpt0] = useState('');
-  const [opt1, setOpt1] = useState('');
-  const [opt2, setOpt2] = useState('');
-  const [opt3, setOpt3] = useState('');
-  const [corrAns, setCorrAns] = useState('0');
-  const [newHint, setNewHint] = useState('');
-  const [newExpl, setNewExpl] = useState('');
-  const [msg, setMsg] = useState('');
+  const [newSub, setNewSub] = useState("Mathematics");
+  const [newTopic, setNewTopic] = useState("Calculus");
+  const [newDiff, setNewDiff] = useState<"Easy" | "Medium" | "Hard">("Medium");
+  const [newType, setNewType] = useState<"mcq" | "fill_in_the_blank">("mcq");
+  const [newText, setNewText] = useState("");
+  const [opt0, setOpt0] = useState("");
+  const [opt1, setOpt1] = useState("");
+  const [opt2, setOpt2] = useState("");
+  const [opt3, setOpt3] = useState("");
+  const [corrAns, setCorrAns] = useState("0");
+  const [newExamName, setNewExamName] = useState<"WAEC" | "JAMB">("WAEC");
+  const [newExamYear, setNewExamYear] = useState(
+    String(new Date().getFullYear()),
+  );
+  const [newQuestionNumber, setNewQuestionNumber] = useState("1");
+  const [newHint, setNewHint] = useState("");
+  const [newExpl, setNewExpl] = useState("");
+  const [msg, setMsg] = useState("");
 
   // AI Bulk Generation States
-  const [aiSub, setAiSub] = useState('Physics');
-  const [aiTopic, setAiTopic] = useState('Quantum Mechanics');
+  const [aiSub, setAiSub] = useState("Physics");
+  const [aiTopic, setAiTopic] = useState("Quantum Mechanics");
   const [aiCount, setAiCount] = useState(3);
+  const [aiExamName, setAiExamName] = useState<"WAEC" | "JAMB">("WAEC");
+  const [aiExamYear, setAiExamYear] = useState(
+    String(new Date().getFullYear()),
+  );
+  const [aiQuestionStartNumber, setAiQuestionStartNumber] = useState("1");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiGeneratedQs, setAiGeneratedQs] = useState<Question[]>([]);
 
   // CSV State
-  const [rawCsvText, setRawCsvText] = useState('');
+  const [rawCsvText, setRawCsvText] = useState("");
   const [csvPreview, setCsvPreview] = useState<Question[]>([]);
 
   // Announcements Form State
-  const [annTitle, setAnnTitle] = useState('');
-  const [annContent, setAnnContent] = useState('');
-  const [annCat, setAnnCat] = useState<'Exam Update' | 'Reward' | 'Tournament'>('Tournament');
+  const [annTitle, setAnnTitle] = useState("");
+  const [annContent, setAnnContent] = useState("");
+  const [annCat, setAnnCat] = useState<"Exam Update" | "Reward" | "Tournament">(
+    "Tournament",
+  );
 
   // Dynamic student candidate monitoring database sourced from localStorage
   const [candidates, setCandidates] = useState<any[]>(() => {
-    const saved = localStorage.getItem('waec_registered_users');
+    const saved = localStorage.getItem("waec_registered_users");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.length > 0) return parsed;
       } catch (e) {
-        console.error('Failed to parse candidates:', e);
+        console.error("Failed to parse candidates:", e);
       }
     }
     // Fallback seed
     const defaultData = [
       {
-        username: 'Ihum Triumph',
-        email: 'timothyihum@gmail.com',
-        avatar: '🦁',
+        username: "Ihum Triumph",
+        email: "timothyihum@gmail.com",
+        avatar: "🦁",
         level: 35,
-        rankTier: 'Diamond Legend',
+        rankTier: "Diamond Legend",
         streak: 15,
         accuracy: 96,
         timeSpentMinutes: 1240,
         totalQuizzes: 28,
-        status: 'Clean',
-        school: 'King\'s College, Lagos',
-        state: 'Lagos',
+        status: "Clean",
+        school: "King's College, Lagos",
+        state: "Lagos",
         subjectsStudied: {
-          'Mathematics': 640,
-          'English Language': 585,
-          'Physics': 240
+          Mathematics: 640,
+          "English Language": 585,
+          Physics: 240,
         },
         isAdmin: true,
-        isPremium: true
+        isPremium: true,
       },
       {
-        username: 'Ihum Temitope',
-        email: 'temiokusami@gmail.com',
-        avatar: '👑',
+        username: "Ihum Temitope",
+        email: "temiokusami@gmail.com",
+        avatar: "👑",
         level: 35,
-        rankTier: 'Diamond Legend',
+        rankTier: "Diamond Legend",
         streak: 15,
         accuracy: 96,
         timeSpentMinutes: 1240,
         totalQuizzes: 28,
-        status: 'Clean',
-        school: 'King\'s College, Lagos',
-        state: 'Lagos',
+        status: "Clean",
+        school: "King's College, Lagos",
+        state: "Lagos",
         subjectsStudied: {
-          'Mathematics': 640,
-          'English Language': 585,
-          'Physics': 240
+          Mathematics: 640,
+          "English Language": 585,
+          Physics: 240,
         },
         isAdmin: true,
-        isPremium: true
+        isPremium: true,
       },
       {
-        username: 'Ihum Temitope',
-        email: 'temitope@waecmaster.edu.ng',
-        avatar: '👧',
+        username: "Ihum Temitope",
+        email: "temitope@waecmaster.edu.ng",
+        avatar: "👧",
         level: 35,
-        rankTier: 'Diamond Legend',
+        rankTier: "Diamond Legend",
         streak: 15,
         accuracy: 96,
         timeSpentMinutes: 1240,
         totalQuizzes: 28,
-        status: 'Clean',
-        school: 'King\'s College, Lagos',
-        state: 'Lagos',
+        status: "Clean",
+        school: "King's College, Lagos",
+        state: "Lagos",
         subjectsStudied: {
-          'Mathematics': 640,
-          'English Language': 585,
-          'Physics': 240
+          Mathematics: 640,
+          "English Language": 585,
+          Physics: 240,
         },
         isAdmin: true,
-        isPremium: true
+        isPremium: true,
       },
       {
-        username: 'Ihum Triumph',
-        email: 'triumph@waecmaster.edu.ng',
-        avatar: '👦',
+        username: "Ihum Triumph",
+        email: "triumph@waecmaster.edu.ng",
+        avatar: "👦",
         level: 35,
-        rankTier: 'Diamond Legend',
+        rankTier: "Diamond Legend",
         streak: 15,
         accuracy: 96,
         timeSpentMinutes: 1240,
         totalQuizzes: 28,
-        status: 'Clean',
-        school: 'King\'s College, Lagos',
-        state: 'Lagos',
+        status: "Clean",
+        school: "King's College, Lagos",
+        state: "Lagos",
         subjectsStudied: {
-          'Mathematics': 640,
-          'English Language': 585,
-          'Physics': 240
+          Mathematics: 640,
+          "English Language": 585,
+          Physics: 240,
         },
         isAdmin: true,
-        isPremium: true
-      }
+        isPremium: true,
+      },
     ];
-    localStorage.setItem('waec_registered_users', JSON.stringify(defaultData));
+    localStorage.setItem("waec_registered_users", JSON.stringify(defaultData));
     return defaultData;
   });
+
+  const buildPaperMetadata = (
+    examName: "WAEC" | "JAMB",
+    subject: string,
+    examYear: number,
+  ) => {
+    const safeSubjectSlug = subject
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    return {
+      paperId: `${examName.toLowerCase()}-${safeSubjectSlug}-${examYear}`,
+      paperTitle: `${examName} ${subject} ${examYear}`,
+    };
+  };
 
   const [selectedCandidate, setSelectedCandidate] = useState<any | null>(() => {
     return candidates.length > 0 ? candidates[0] : null;
   });
-  const [candidateSearch, setCandidateSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Clean' | 'Suspicious' | 'Banned'>('All');
+  const [candidateSearch, setCandidateSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "All" | "Clean" | "Suspicious" | "Banned"
+  >("All");
   const [bannedUsers, setBannedUsers] = useState<string[]>(() => {
-    return candidates.filter(u => u.status === 'Banned').map(u => u.username);
+    return candidates
+      .filter((u) => u.status === "Banned")
+      .map((u) => u.username);
   });
 
   // Track edits to candidates to persist dynamically
   React.useEffect(() => {
-    localStorage.setItem('waec_registered_users', JSON.stringify(candidates));
+    localStorage.setItem("waec_registered_users", JSON.stringify(candidates));
   }, [candidates]);
 
   const handleAddQuestionLocal = (e: React.FormEvent) => {
     e.preventDefault();
+    const examYear = Number(newExamYear) || new Date().getFullYear();
+    const questionNumber = Number(newQuestionNumber) || 1;
+    const paperMeta = buildPaperMetadata(newExamName, newSub, examYear);
+
     const newQ: Question = {
       id: `custom-q-${Date.now()}`,
       subject: newSub,
       topic: newTopic,
       type: newType,
       text: newText,
-      options: newType === 'mcq' ? [opt0, opt1, opt2, opt3] : undefined,
+      options: newType === "mcq" ? [opt0, opt1, opt2, opt3] : undefined,
       correctAnswer: corrAns,
-      explanation: newExpl || 'Solved by WAEC administrative guides.',
+      explanation: newExpl || "Solved by WAEC administrative guides.",
       hint: newHint || undefined,
       difficulty: newDiff,
-      marks: 3
+      marks: 3,
+      examName: newExamName,
+      examYear,
+      questionNumber,
+      paperId: paperMeta.paperId,
+      paperTitle: paperMeta.paperTitle,
     };
 
     onAddQuestion(newQ);
-    setMsg('Question added successfully!');
-    setNewText('');
-    setOpt0(''); setOpt1(''); setOpt2(''); setOpt3('');
-    setNewHint(''); setNewExpl('');
-    setTimeout(() => setMsg(''), 2000);
+    setMsg("Question added successfully!");
+    setNewText("");
+    setOpt0("");
+    setOpt1("");
+    setOpt2("");
+    setOpt3("");
+    setNewHint("");
+    setNewExpl("");
+    setNewQuestionNumber((questionNumber + 1).toString());
+    setTimeout(() => setMsg(""), 2000);
   };
 
   // Invoke server bulk AI questions compiler using Gemini!
   const handleAiBulkGenerate = async () => {
     setAiLoading(true);
     try {
-      const resp = await fetch('/api/gemini/generate-questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const resp = await fetch("/api/gemini/generate-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subject: aiSub,
           topic: aiTopic,
-          count: aiCount
-        })
+          count: aiCount,
+        }),
       });
 
       if (resp.ok) {
@@ -288,38 +373,66 @@ export default function AdminPanel({
 
   // Commit AI list to DB
   const handleCommitAiQuestions = () => {
-    aiGeneratedQs.forEach(q => {
+    const examYear = Number(aiExamYear) || new Date().getFullYear();
+    const startNumber = Number(aiQuestionStartNumber) || 1;
+    const paperMeta = buildPaperMetadata(aiExamName, aiSub, examYear);
+
+    aiGeneratedQs.forEach((q, index) => {
       onAddQuestion({
         ...q,
-        id: `ai-committed-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+        id: `ai-committed-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        subject: aiSub,
+        examName: aiExamName,
+        examYear,
+        questionNumber: startNumber + index,
+        paperId: paperMeta.paperId,
+        paperTitle: paperMeta.paperTitle,
       });
     });
     setAiGeneratedQs([]);
-    setMsg('AI Questions committed to question bank successfully!');
-    setTimeout(() => setMsg(''), 2000);
+    setMsg("AI Questions committed to question bank successfully!");
+    setTimeout(() => setMsg(""), 2000);
   };
 
   // CSV Drag parse
   const handleParseCsv = () => {
     if (!rawCsvText.trim()) return;
-    const lines = rawCsvText.split('\n');
+    const lines = rawCsvText.split("\n");
     const parsed: Question[] = [];
 
     lines.forEach((ln, idx) => {
       if (idx === 0) return; // skip header line
-      const cols = ln.split(',');
-      if (cols.length >= 7) {
+      const cols = ln.split(",");
+      if (cols.length >= 8) {
+        const subject = cols[0]?.trim() || "Mathematics";
+        const examName = (cols[8]?.trim() || "WAEC") as "WAEC" | "JAMB";
+        const examYear = Number(cols[9]?.trim()) || new Date().getFullYear();
+        const questionNumber = Number(cols[10]?.trim()) || idx;
+        const paperMeta = buildPaperMetadata(examName, subject, examYear);
+
         parsed.push({
           id: `csv-${Date.now()}-${idx}`,
-          subject: cols[0]?.trim() || 'Mathematics',
-          topic: cols[1]?.trim() || 'Calculus',
-          type: 'mcq',
-          text: cols[2]?.trim() || 'What is the sum of 2 and 2?',
-          options: [cols[3]?.trim(), cols[4]?.trim(), cols[5]?.trim(), cols[6]?.trim()],
-          correctAnswer: cols[7]?.trim() || '0',
-          explanation: 'CSV bulk loaded diagnostic.',
-          difficulty: 'Medium',
-          marks: 3
+          subject,
+          topic: cols[1]?.trim() || "Calculus",
+          type: "mcq",
+          text: cols[2]?.trim() || "What is the sum of 2 and 2?",
+          options: [
+            cols[3]?.trim(),
+            cols[4]?.trim(),
+            cols[5]?.trim(),
+            cols[6]?.trim(),
+          ],
+          correctAnswer: cols[7]?.trim() || "0",
+          explanation: cols[12]?.trim() || "CSV bulk loaded diagnostic.",
+          hint: cols[11]?.trim() || undefined,
+          difficulty:
+            (cols[13]?.trim() as "Easy" | "Medium" | "Hard") || "Medium",
+          marks: 3,
+          examName,
+          examYear,
+          questionNumber,
+          paperId: paperMeta.paperId,
+          paperTitle: paperMeta.paperTitle,
         });
       }
     });
@@ -328,11 +441,11 @@ export default function AdminPanel({
   };
 
   const handleCommitCsv = () => {
-    csvPreview.forEach(q => onAddQuestion(q));
+    csvPreview.forEach((q) => onAddQuestion(q));
     setCsvPreview([]);
-    setRawCsvText('');
-    setMsg('CSV Rows committed successfully!');
-    setTimeout(() => setMsg(''), 2000);
+    setRawCsvText("");
+    setMsg("CSV Rows committed successfully!");
+    setTimeout(() => setMsg(""), 2000);
   };
 
   const handleCreateAnnouncement = async (e: React.FormEvent) => {
@@ -340,32 +453,36 @@ export default function AdminPanel({
     if (!annTitle || !annContent) return;
 
     try {
-      const response = await fetch('/api/announcements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/announcements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: annTitle,
           content: annContent,
-          category: annCat
-        })
+          category: annCat,
+        }),
       });
 
       if (response.ok) {
-        onPostAnnouncement({ title: annTitle, content: annContent, category: annCat });
-        setAnnTitle('');
-        setAnnContent('');
-        setMsg('Announcement posted dynamically!');
-        setTimeout(() => setMsg(''), 2000);
+        onPostAnnouncement({
+          title: annTitle,
+          content: annContent,
+          category: annCat,
+        });
+        setAnnTitle("");
+        setAnnContent("");
+        setMsg("Announcement posted dynamically!");
+        setTimeout(() => setMsg(""), 2000);
       }
     } catch (err) {
-      console.error('Failed to post announcement:', err);
+      console.error("Failed to post announcement:", err);
     }
   };
 
   const toggleBanUser = (usr: string) => {
-    setBannedUsers(prev => {
+    setBannedUsers((prev) => {
       if (prev.includes(usr)) {
-        return prev.filter(u => u !== usr);
+        return prev.filter((u) => u !== usr);
       } else {
         return [...prev, usr];
       }
@@ -373,15 +490,20 @@ export default function AdminPanel({
   };
 
   return (
-    <div id="admin-workspace-root" className="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-xl max-w-5xl xl:max-w-6xl mx-auto space-y-8">
-      
+    <div
+      id="admin-workspace-root"
+      className="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-xl max-w-5xl xl:max-w-6xl mx-auto space-y-8"
+    >
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center pb-4 border-b border-slate-150">
         <div>
           <h2 className="font-display font-extrabold text-2xl text-slate-950 flex items-center gap-2">
             <Database className="text-indigo-600 w-7 h-7" />
             CBT Content Administration
           </h2>
-          <p className="text-xs text-slate-500">Add questions, ban cheaters, post community update cards with server actions</p>
+          <p className="text-xs text-slate-500">
+            Add questions, ban cheaters, post community update cards with server
+            actions
+          </p>
         </div>
 
         {/* Info alerts */}
@@ -394,34 +516,58 @@ export default function AdminPanel({
 
       {/* Nav Row Tab headers */}
       <div className="flex flex-wrap gap-1.5 border-b border-slate-100 pb-2">
-        {(['questions', 'ai_bulk', 'ocr_extract', 'csv', 'users', 'announcements', 'subjects', 'otp'] as const).map(tab => (
+        {(
+          [
+            "questions",
+            "ai_bulk",
+            "ocr_extract",
+            "csv",
+            "users",
+            "announcements",
+            "subjects",
+            "otp",
+          ] as const
+        ).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`py-2 px-4.5 rounded-xl text-xs font-bold transition uppercase cursor-pointer ${activeTab === tab ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-indigo-600'}`}
+            className={`py-2 px-4.5 rounded-xl text-xs font-bold transition uppercase cursor-pointer ${activeTab === tab ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-indigo-600"}`}
           >
-            {tab === 'ocr_extract' ? '✨ AI OCR Extractor' : tab.replace('_', ' ')}
+            {tab === "ocr_extract"
+              ? "✨ AI OCR Extractor"
+              : tab.replace("_", " ")}
           </button>
         ))}
       </div>
 
       {/* TAB 1: ADD / REDACT QUESTIONS */}
-      {activeTab === 'questions' && (
-        <div id="admin-questions-tab" className="grid grid-cols-1 lg:grid-cols-12 gap-8 pt-4">
-          
-          <form onSubmit={handleAddQuestionLocal} className="lg:col-span-7 space-y-4">
-            <h3 className="font-display font-bold text-slate-800 text-sm">Create New CBT Question</h3>
-            
+      {activeTab === "questions" && (
+        <div
+          id="admin-questions-tab"
+          className="grid grid-cols-1 lg:grid-cols-12 gap-8 pt-4"
+        >
+          <form
+            onSubmit={handleAddQuestionLocal}
+            className="lg:col-span-7 space-y-4"
+          >
+            <h3 className="font-display font-bold text-slate-800 text-sm">
+              Create New CBT Question
+            </h3>
+
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="space-y-1">
-                <label className="font-bold text-slate-600">Select Subject</label>
+                <label className="font-bold text-slate-600">
+                  Select Subject
+                </label>
                 <select
                   value={newSub}
-                  onChange={e => setNewSub(e.target.value)}
+                  onChange={(e) => setNewSub(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2 px-3 focus:outline-hidden"
                 >
-                  {SUBJECTS_LIST.map(sub => (
-                    <option key={sub} value={sub}>{sub}</option>
+                  {SUBJECTS_LIST.map((sub) => (
+                    <option key={sub} value={sub}>
+                      {sub}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -433,7 +579,7 @@ export default function AdminPanel({
                   required
                   placeholder="e.g. Waves"
                   value={newTopic}
-                  onChange={e => setNewTopic(e.target.value)}
+                  onChange={(e) => setNewTopic(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2 px-3 focus:outline-hidden"
                 />
               </div>
@@ -444,7 +590,7 @@ export default function AdminPanel({
                 <label className="font-bold text-slate-600">Difficulty</label>
                 <select
                   value={newDiff}
-                  onChange={e => setNewDiff(e.target.value as any)}
+                  onChange={(e) => setNewDiff(e.target.value as any)}
                   className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2 px-3 focus:outline-hidden"
                 >
                   <option value="Easy">Easy</option>
@@ -457,7 +603,7 @@ export default function AdminPanel({
                 <label className="font-bold text-slate-600">Type</label>
                 <select
                   value={newType}
-                  onChange={e => setNewType(e.target.value as any)}
+                  onChange={(e) => setNewType(e.target.value as any)}
                   className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2 px-3 focus:outline-hidden"
                 >
                   <option value="mcq">Multiple Choice Question</option>
@@ -466,32 +612,102 @@ export default function AdminPanel({
               </div>
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-600">Exam Body</label>
+                <select
+                  value={newExamName}
+                  onChange={(e) =>
+                    setNewExamName(e.target.value as "WAEC" | "JAMB")
+                  }
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2 px-3 focus:outline-hidden"
+                >
+                  <option value="WAEC">WAEC</option>
+                  <option value="JAMB">JAMB</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-600">Exam Year</label>
+                <input
+                  type="number"
+                  value={newExamYear}
+                  onChange={(e) => setNewExamYear(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2 px-3 focus:outline-hidden"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-600">
+                  Question Number
+                </label>
+                <input
+                  type="number"
+                  value={newQuestionNumber}
+                  onChange={(e) => setNewQuestionNumber(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2 px-3 focus:outline-hidden"
+                />
+              </div>
+            </div>
+
             {/* Question label text input */}
             <div className="space-y-1 text-xs">
-              <label className="font-bold text-slate-600">Question Content Text</label>
+              <label className="font-bold text-slate-600">
+                Question Content Text
+              </label>
               <textarea
                 required
                 rows={3}
                 placeholder="Type the CBT prompt prompt here..."
                 value={newText}
-                onChange={e => setNewText(e.target.value)}
+                onChange={(e) => setNewText(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-2xl py-3 px-4 focus:outline-hidden resize-none"
               />
             </div>
 
-            {newType === 'mcq' && (
+            {newType === "mcq" && (
               <div className="space-y-2 pt-2 text-xs">
-                <label className="font-bold text-slate-600 block">MCQ Options</label>
+                <label className="font-bold text-slate-600 block">
+                  MCQ Options
+                </label>
                 <div className="grid grid-cols-2 gap-3">
-                  <input type="text" placeholder="Option A" value={opt0} onChange={e => setOpt0(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-hidden" />
-                  <input type="text" placeholder="Option B" value={opt1} onChange={e => setOpt1(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-hidden" />
-                  <input type="text" placeholder="Option C" value={opt2} onChange={e => setOpt2(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-hidden" />
-                  <input type="text" placeholder="Option D" value={opt3} onChange={e => setOpt3(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-hidden" />
+                  <input
+                    type="text"
+                    placeholder="Option A"
+                    value={opt0}
+                    onChange={(e) => setOpt0(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-hidden"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Option B"
+                    value={opt1}
+                    onChange={(e) => setOpt1(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-hidden"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Option C"
+                    value={opt2}
+                    onChange={(e) => setOpt2(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-hidden"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Option D"
+                    value={opt3}
+                    onChange={(e) => setOpt3(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-hidden"
+                  />
                 </div>
 
                 <div className="space-y-1 pt-1">
-                  <label className="font-bold text-slate-600 block">Index of Correct Option</label>
-                  <select value={corrAns} onChange={e => setCorrAns(e.target.value)} className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2 px-3 focus:outline-hidden">
+                  <label className="font-bold text-slate-600 block">
+                    Index of Correct Option
+                  </label>
+                  <select
+                    value={corrAns}
+                    onChange={(e) => setCorrAns(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2 px-3 focus:outline-hidden"
+                  >
                     <option value="0">Option A (Index 0)</option>
                     <option value="1">Option B (Index 1)</option>
                     <option value="2">Option C (Index 2)</option>
@@ -501,40 +717,83 @@ export default function AdminPanel({
               </div>
             )}
 
-            {newType === 'fill_in_the_blank' && (
+            {newType === "fill_in_the_blank" && (
               <div className="space-y-1 text-xs">
-                <label className="font-bold text-slate-600 block">Written Correct Answer</label>
-                <input type="text" placeholder="e.g. 30" value={corrAns} onChange={e => setCorrAns(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-hidden font-mono" />
+                <label className="font-bold text-slate-600 block">
+                  Written Correct Answer
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 30"
+                  value={corrAns}
+                  onChange={(e) => setCorrAns(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-hidden font-mono"
+                />
               </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="space-y-1">
-                <label className="font-bold text-slate-600">Hint (Optional)</label>
-                <input type="text" placeholder="e.g. Think of velocity formulas" value={newHint} onChange={e => setNewHint(e.target.value)} className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl.5 py-2 px-3 focus:outline-hidden" />
+                <label className="font-bold text-slate-600">
+                  Hint (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Think of velocity formulas"
+                  value={newHint}
+                  onChange={(e) => setNewHint(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl.5 py-2 px-3 focus:outline-hidden"
+                />
               </div>
               <div className="space-y-1">
-                <label className="font-bold text-slate-600">Explanation Details</label>
-                <input type="text" placeholder="e.g. Split terms factor..." value={newExpl} onChange={e => setNewExpl(e.target.value)} className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl.5 py-2 px-3 focus:outline-hidden" />
+                <label className="font-bold text-slate-600">
+                  Explanation Details
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Split terms factor..."
+                  value={newExpl}
+                  onChange={(e) => setNewExpl(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl.5 py-2 px-3 focus:outline-hidden"
+                />
               </div>
             </div>
 
-            <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-md transition">
+            <button
+              type="submit"
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-md transition"
+            >
               Insert Question to Platform
             </button>
           </form>
 
           {/* RIGHT SIDEBAR: CURRENT BANK VIEW */}
           <div className="lg:col-span-5 space-y-4">
-            <h4 className="font-display font-bold text-slate-800 text-sm">Active Bank Preview ({questionsList.length} items)</h4>
-            
+            <h4 className="font-display font-bold text-slate-800 text-sm">
+              Active Bank Preview ({questionsList.length} items)
+            </h4>
+
             <div className="max-h-96 overflow-y-auto divide-y divide-slate-150 border border-slate-150 rounded-2xl overflow-hidden p-3 space-y-2 scrollbar-thin">
               {questionsList.map((q, idx) => (
-                <div key={q.id || idx} className="p-3 bg-slate-50 rounded-xl flex justify-between items-start gap-3">
+                <div
+                  key={q.id || idx}
+                  className="p-3 bg-slate-50 rounded-xl flex justify-between items-start gap-3"
+                >
                   <div className="w-0 shrink grow">
-                    <span className="text-[10px] font-bold text-indigo-700 block bg-indigo-50 px-2 py-0.5 rounded-md w-max uppercase">{q.subject}</span>
-                    <p className="text-2xs text-slate-800 truncate mt-1">{q.text}</p>
-                    <p className="text-3xs text-slate-400 font-mono">ID: {q.id || idx}</p>
+                    <span className="text-[10px] font-bold text-indigo-700 block bg-indigo-50 px-2 py-0.5 rounded-md w-max uppercase">
+                      {q.subject}
+                    </span>
+                    <p className="text-3xs text-slate-500 mt-1">
+                      {q.paperTitle ||
+                        `${q.examName || "WAEC"} ${q.subject} ${q.examYear || "N/A"}`}{" "}
+                      • Q{q.questionNumber || "-"}
+                    </p>
+                    <p className="text-2xs text-slate-800 truncate mt-1">
+                      {q.text}
+                    </p>
+                    <p className="text-3xs text-slate-400 font-mono">
+                      ID: {q.id || idx}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -548,40 +807,97 @@ export default function AdminPanel({
               ))}
             </div>
           </div>
-
         </div>
       )}
 
       {/* TAB 2: AI BULK GENERATOR USING SERVER GEMINI */}
-      {activeTab === 'ai_bulk' && (
+      {activeTab === "ai_bulk" && (
         <div id="admin-ai-tab" className="space-y-6 pt-4 animate-fadeIn">
           <div className="max-w-md space-y-2">
             <h3 className="font-display font-bold text-slate-800 text-sm flex items-center gap-1.5">
-              <Sparkles className="text-indigo-600 w-5 h-5" /> Gemini Automated CBT Compiler
+              <Sparkles className="text-indigo-600 w-5 h-5" /> Gemini Automated
+              CBT Compiler
             </h3>
             <p className="text-xs text-slate-500">
-              Input the subject syllabus and topic segment. Our Gemini Agent will automatically construct challenging questions complete with hints and explanations.
+              Input the subject syllabus and topic segment. Our Gemini Agent
+              will automatically construct challenging questions complete with
+              hints and explanations.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-7 gap-4 text-xs items-end">
             <div className="space-y-1">
-              <label className="font-bold text-slate-600">Syllabus Subject</label>
-              <select value={aiSub} onChange={e => setAiSub(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3">
-                {SUBJECTS_LIST.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+              <label className="font-bold text-slate-600">
+                Syllabus Subject
+              </label>
+              <select
+                value={aiSub}
+                onChange={(e) => setAiSub(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3"
+              >
+                {SUBJECTS_LIST.map((sub) => (
+                  <option key={sub} value={sub}>
+                    {sub}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="space-y-1">
               <label className="font-bold text-slate-600">Syllabus Topic</label>
-              <input type="text" placeholder="e.g. Electromagnetism" value={aiTopic} onChange={e => setAiTopic(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3" />
+              <input
+                type="text"
+                placeholder="e.g. Electromagnetism"
+                value={aiTopic}
+                onChange={(e) => setAiTopic(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3"
+              />
             </div>
             <div className="space-y-1">
-              <label className="font-bold text-slate-600">Questions Count</label>
-              <select value={aiCount} onChange={e => setAiCount(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3">
+              <label className="font-bold text-slate-600">
+                Questions Count
+              </label>
+              <select
+                value={aiCount}
+                onChange={(e) => setAiCount(Number(e.target.value))}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3"
+              >
                 <option value={2}>2 Questions</option>
                 <option value={3}>3 Questions</option>
                 <option value={5}>5 Questions</option>
               </select>
+            </div>
+            <div className="space-y-1">
+              <label className="font-bold text-slate-600">Exam Body</label>
+              <select
+                value={aiExamName}
+                onChange={(e) =>
+                  setAiExamName(e.target.value as "WAEC" | "JAMB")
+                }
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3"
+              >
+                <option value="WAEC">WAEC</option>
+                <option value="JAMB">JAMB</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="font-bold text-slate-600">Exam Year</label>
+              <input
+                type="number"
+                value={aiExamYear}
+                onChange={(e) => setAiExamYear(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="font-bold text-slate-600">
+                Start Question No.
+              </label>
+              <input
+                type="number"
+                value={aiQuestionStartNumber}
+                onChange={(e) => setAiQuestionStartNumber(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3"
+              />
             </div>
 
             <button
@@ -589,20 +905,35 @@ export default function AdminPanel({
               disabled={aiLoading}
               className="py-3 px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
             >
-              {aiLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} AI Compiler Compile
+              {aiLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4" />
+              )}{" "}
+              AI Compiler Compile
             </button>
           </div>
 
           {/* Preview results */}
           {aiGeneratedQs.length > 0 && (
             <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200/50 space-y-4 animate-fadeIn">
-              <h4 className="font-display font-bold text-slate-800 text-sm">Compiled AI Questions List ({aiGeneratedQs.length})</h4>
-              
+              <h4 className="font-display font-bold text-slate-800 text-sm">
+                Compiled AI Questions List ({aiGeneratedQs.length})
+              </h4>
+
               <div className="space-y-4 overflow-y-auto max-h-80 pr-1 text-xs">
                 {aiGeneratedQs.map((q, idx) => (
-                  <div key={idx} className="bg-white p-4.5 rounded-xl border border-slate-100 space-y-2">
-                    <p className="font-bold text-slate-900 leading-normal">{idx + 1}. {q.text}</p>
-                    <p className="text-3xs text-slate-500">Correct Answer: <b>{q.correctAnswer}</b> • Hint: <i>{q.hint || 'None'}</i></p>
+                  <div
+                    key={idx}
+                    className="bg-white p-4.5 rounded-xl border border-slate-100 space-y-2"
+                  >
+                    <p className="font-bold text-slate-900 leading-normal">
+                      {idx + 1}. {q.text}
+                    </p>
+                    <p className="text-3xs text-slate-500">
+                      Correct Answer: <b>{q.correctAnswer}</b> • Hint:{" "}
+                      <i>{q.hint || "None"}</i>
+                    </p>
                   </div>
                 ))}
               </div>
@@ -619,25 +950,34 @@ export default function AdminPanel({
       )}
 
       {/* TAB 3: CSV BULK UPLOAD */}
-      {activeTab === 'csv' && (
-        <div id="admin-csv-tab" className="space-y-6 pt-4 animate-fadeIn text-xs">
+      {activeTab === "csv" && (
+        <div
+          id="admin-csv-tab"
+          className="space-y-6 pt-4 animate-fadeIn text-xs"
+        >
           <div className="max-w-md space-y-1">
             <h3 className="font-display font-bold text-slate-800 text-sm flex items-center gap-1.5">
-              <Upload className="text-indigo-600 w-5 h-5" /> CSV Batch Bulk Creator
+              <Upload className="text-indigo-600 w-5 h-5" /> CSV Batch Bulk
+              Creator
             </h3>
             <p className="text-xs text-slate-500">
-              Input standard CSV data blocks below to create hundreds of questions instantly. Columns match standard indices.
+              Input standard CSV data blocks below to create hundreds of
+              questions instantly. Include exam body, year, and question number
+              columns so each upload is grouped into the right paper.
             </p>
           </div>
 
           {/* Sample CSV text area helper */}
           <div className="space-y-1">
-            <span className="font-bold text-slate-400 block tracking-wider text-2xs uppercase">Paste Raw CSV text rows (Header: Subject,Topic,Text,OptA,OptB,OptC,OptD,AnswerIndex)</span>
+            <span className="font-bold text-slate-400 block tracking-wider text-2xs uppercase">
+              Paste Raw CSV text rows (Header:
+              Subject,Topic,Text,OptA,OptB,OptC,OptD,AnswerIndex,ExamName,ExamYear,QuestionNumber,Hint,Explanation,Difficulty)
+            </span>
             <textarea
               rows={4}
-              placeholder="Mathematics,Set,What is the sum of sets A and B?,Union,Intersection,Subset,Null,0"
+              placeholder="Mathematics,Set,What is the sum of sets A and B?,Union,Intersection,Subset,Null,0,WAEC,2024,1,Think of set union,CSV import explanation,Medium"
               value={rawCsvText}
-              onChange={e => setRawCsvText(e.target.value)}
+              onChange={(e) => setRawCsvText(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 font-mono rounded-xl p-3 focus:outline-hidden"
             />
           </div>
@@ -662,32 +1002,52 @@ export default function AdminPanel({
       )}
 
       {/* TAB 4: ADVANCED CANDIDATE SCOREBOARD & METRICS TRACKING */}
-      {activeTab === 'users' && (
-        <div id="admin-users-tab" className="space-y-6 pt-2 animate-fadeIn text-xs">
-          
+      {activeTab === "users" && (
+        <div
+          id="admin-users-tab"
+          className="space-y-6 pt-2 animate-fadeIn text-xs"
+        >
           {/* Header & Quick stats banner */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-4">
             <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 p-4 rounded-2xl border border-indigo-100 flex items-center justify-between">
               <div>
-                <p className="text-[10px] uppercase font-black tracking-widest text-indigo-500">Total Scholars</p>
-                <h4 className="text-xl font-black text-indigo-900 mt-1">{candidates.length} Registered</h4>
+                <p className="text-[10px] uppercase font-black tracking-widest text-indigo-500">
+                  Total Scholars
+                </p>
+                <h4 className="text-xl font-black text-indigo-900 mt-1">
+                  {candidates.length} Registered
+                </h4>
               </div>
               <span className="text-2xl">👥</span>
             </div>
             <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between">
               <div>
-                <p className="text-[10px] uppercase font-black tracking-widest text-emerald-500">Combined Study Hours</p>
+                <p className="text-[10px] uppercase font-black tracking-widest text-emerald-500">
+                  Combined Study Hours
+                </p>
                 <h4 className="text-xl font-black text-emerald-950 mt-1">
-                  {(candidates.reduce((acc, curr) => acc + curr.timeSpentMinutes, 0) / 60).toFixed(1)} Hours
+                  {(
+                    candidates.reduce(
+                      (acc, curr) => acc + curr.timeSpentMinutes,
+                      0,
+                    ) / 60
+                  ).toFixed(1)}{" "}
+                  Hours
                 </h4>
               </div>
               <span className="text-2xl">⏱️</span>
             </div>
             <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-2xl border border-purple-100 flex items-center justify-between">
               <div>
-                <p className="text-[10px] uppercase font-black tracking-widest text-purple-500">Avg. Score Accuracy</p>
+                <p className="text-[10px] uppercase font-black tracking-widest text-purple-500">
+                  Avg. Score Accuracy
+                </p>
                 <h4 className="text-xl font-black text-purple-950 mt-1">
-                  {Math.round(candidates.reduce((acc, curr) => acc + curr.accuracy, 0) / candidates.length)}% Correct
+                  {Math.round(
+                    candidates.reduce((acc, curr) => acc + curr.accuracy, 0) /
+                      candidates.length,
+                  )}
+                  % Correct
                 </h4>
               </div>
               <span className="text-2xl">🎯</span>
@@ -701,18 +1061,18 @@ export default function AdminPanel({
                 type="text"
                 placeholder="Search candidates, schools or states..."
                 value={candidateSearch}
-                onChange={e => setCandidateSearch(e.target.value)}
+                onChange={(e) => setCandidateSearch(e.target.value)}
                 className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-2 px-3 text-2xs focus:outline-hidden"
               />
             </div>
 
             {/* Quick Filter tabs */}
             <div className="flex gap-1.5 flex-wrap">
-              {(['All', 'Clean', 'Suspicious', 'Banned'] as const).map(f => (
+              {(["All", "Clean", "Suspicious", "Banned"] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setStatusFilter(f)}
-                  className={`px-3 py-1.5 rounded-lg text-3xs font-extrabold tracking-wide uppercase transition cursor-pointer ${statusFilter === f ? 'bg-indigo-600 text-white' : 'bg-white hover:bg-slate-100 text-slate-500 border border-slate-100'}`}
+                  className={`px-3 py-1.5 rounded-lg text-3xs font-extrabold tracking-wide uppercase transition cursor-pointer ${statusFilter === f ? "bg-indigo-600 text-white" : "bg-white hover:bg-slate-100 text-slate-500 border border-slate-100"}`}
                 >
                   {f}
                 </button>
@@ -722,19 +1082,26 @@ export default function AdminPanel({
 
           {/* Interactive Dual-Panel candidate explorer */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            
             {/* Left Column: Candidates index scroll list */}
             <div className="lg:col-span-6 space-y-3 max-h-[440px] overflow-y-auto pr-1">
               {candidates
-                .filter(p => {
+                .filter((p) => {
                   const bnd = bannedUsers.includes(p.username);
-                  const statusLabel = bnd ? 'Banned' : p.status;
-                  
+                  const statusLabel = bnd ? "Banned" : p.status;
+
                   // Status filtering match
-                  if (statusFilter !== 'All') {
-                    if (statusFilter === 'Banned' && !bnd) return false;
-                    if (statusFilter === 'Clean' && (statusLabel !== 'Clean' || bnd)) return false;
-                    if (statusFilter === 'Suspicious' && (statusLabel !== 'Suspicious' || bnd)) return false;
+                  if (statusFilter !== "All") {
+                    if (statusFilter === "Banned" && !bnd) return false;
+                    if (
+                      statusFilter === "Clean" &&
+                      (statusLabel !== "Clean" || bnd)
+                    )
+                      return false;
+                    if (
+                      statusFilter === "Suspicious" &&
+                      (statusLabel !== "Suspicious" || bnd)
+                    )
+                      return false;
                   }
 
                   // Text search match
@@ -751,23 +1118,36 @@ export default function AdminPanel({
                 .map((p, idx) => {
                   const bnd = bannedUsers.includes(p.username);
                   const isSelected = selectedCandidate?.username === p.username;
-                  
+
                   return (
                     <div
                       key={idx}
                       onClick={() => setSelectedCandidate(p)}
-                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex justify-between items-center gap-4 ${isSelected ? 'bg-indigo-50/75 border-indigo-200 ring-1 ring-indigo-200' : 'bg-slate-50 hover:bg-white border-slate-150/70'}`}
+                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex justify-between items-center gap-4 ${isSelected ? "bg-indigo-50/75 border-indigo-200 ring-1 ring-indigo-200" : "bg-slate-50 hover:bg-white border-slate-150/70"}`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="text-xl p-1 bg-white rounded-xl shadow-2xs border border-slate-100">{p.avatar}</span>
+                        <span className="text-xl p-1 bg-white rounded-xl shadow-2xs border border-slate-100">
+                          {p.avatar}
+                        </span>
                         <div>
                           <h4 className="font-extrabold text-slate-900 flex items-center gap-1.5 font-sans">
                             {p.username}
-                            {bnd && <span className="bg-red-100 text-red-700 text-[8px] font-black uppercase px-1.5 py-0.2 rounded-full">Banned</span>}
-                            {!bnd && p.status === 'Suspicious' && <span className="bg-amber-100 text-amber-800 text-[8px] font-black uppercase px-1.5 py-0.2 rounded-full">Flagged</span>}
+                            {bnd && (
+                              <span className="bg-red-100 text-red-700 text-[8px] font-black uppercase px-1.5 py-0.2 rounded-full">
+                                Banned
+                              </span>
+                            )}
+                            {!bnd && p.status === "Suspicious" && (
+                              <span className="bg-amber-100 text-amber-800 text-[8px] font-black uppercase px-1.5 py-0.2 rounded-full">
+                                Flagged
+                              </span>
+                            )}
                           </h4>
                           <p className="text-[10px] text-slate-400 mt-0.5 leading-none">
-                            {p.school} • <span className="font-semibold text-slate-500">{p.state}</span>
+                            {p.school} •{" "}
+                            <span className="font-semibold text-slate-500">
+                              {p.state}
+                            </span>
                           </p>
                         </div>
                       </div>
@@ -776,7 +1156,9 @@ export default function AdminPanel({
                         <span className="text-3xs font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
                           Lvl {p.level}
                         </span>
-                        <p className="text-3xs font-bold text-slate-500 font-mono mt-0.5">{p.accuracy}% Acc</p>
+                        <p className="text-3xs font-bold text-slate-500 font-mono mt-0.5">
+                          {p.accuracy}% Acc
+                        </p>
                       </div>
                     </div>
                   );
@@ -787,30 +1169,41 @@ export default function AdminPanel({
             <div className="lg:col-span-6 bg-slate-50/40 p-5 rounded-2xl border border-slate-150">
               {selectedCandidate ? (
                 <div className="space-y-5 animate-fadeIn">
-                  
                   {/* Title profile block */}
                   <div className="flex items-center gap-3.5 pb-4 border-b border-slate-200/60 font-sans">
-                    <span className="text-3xl p-2 bg-white rounded-2xl shadow-xs border border-slate-100">{selectedCandidate.avatar}</span>
+                    <span className="text-3xl p-2 bg-white rounded-2xl shadow-xs border border-slate-100">
+                      {selectedCandidate.avatar}
+                    </span>
                     <div className="w-0 shrink grow">
                       <h4 className="font-display font-black text-slate-950 text-sm flex items-center gap-1.5 truncate">
                         {selectedCandidate.username}
                       </h4>
                       <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide">
-                        {selectedCandidate.isAdmin ? '👑 Exam Admin (Staff Authority)' : `${selectedCandidate.rankTier || 'Bronze Scholar'} • Level ${selectedCandidate.level || 1} Scholar`}
+                        {selectedCandidate.isAdmin
+                          ? "👑 Exam Admin (Staff Authority)"
+                          : `${selectedCandidate.rankTier || "Bronze Scholar"} • Level ${selectedCandidate.level || 1} Scholar`}
                       </p>
                     </div>
 
                     <div className="shrink-0 flex flex-col items-end gap-1">
                       {selectedCandidate.isAdmin && (
-                        <span className="bg-indigo-50 border border-indigo-200 text-indigo-750 font-black px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider block">👑 Exam Admin</span>
+                        <span className="bg-indigo-50 border border-indigo-200 text-indigo-750 font-black px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider block">
+                          👑 Exam Admin
+                        </span>
                       )}
                       {selectedCandidate.isPremium && (
-                        <span className="bg-amber-50 border border-amber-200 text-amber-800 font-black px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider block">💎 Premium Access</span>
+                        <span className="bg-amber-50 border border-amber-200 text-amber-800 font-black px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider block">
+                          💎 Premium Access
+                        </span>
                       )}
                       {bannedUsers.includes(selectedCandidate.username) ? (
-                        <span className="bg-rose-50 border border-rose-200 text-rose-700 font-extrabold px-1.5 py-0.5 rounded text-[8px] uppercase block">Suspended / Banned</span>
+                        <span className="bg-rose-50 border border-rose-200 text-rose-700 font-extrabold px-1.5 py-0.5 rounded text-[8px] uppercase block">
+                          Suspended / Banned
+                        </span>
                       ) : (
-                        <span className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded text-[8px] uppercase block">Validated Account</span>
+                        <span className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded text-[8px] uppercase block">
+                          Validated Account
+                        </span>
                       )}
                     </div>
                   </div>
@@ -818,57 +1211,94 @@ export default function AdminPanel({
                   {/* Institution Details */}
                   <div className="grid grid-cols-2 gap-3 text-3xs font-sans">
                     <div className="bg-white p-2.5 rounded-xl border border-slate-100">
-                      <span className="text-slate-400 font-bold block">Assigned College / School</span>
-                      <p className="font-black text-slate-800 mt-1 truncate">{selectedCandidate.school || 'Unspecified CBT Affiliate College'}</p>
+                      <span className="text-slate-400 font-bold block">
+                        Assigned College / School
+                      </span>
+                      <p className="font-black text-slate-800 mt-1 truncate">
+                        {selectedCandidate.school ||
+                          "Unspecified CBT Affiliate College"}
+                      </p>
                     </div>
                     <div className="bg-white p-2.5 rounded-xl border border-slate-100">
-                      <span className="text-slate-400 font-bold block">State Center Location</span>
-                      <p className="font-black text-slate-800 mt-1">{selectedCandidate.state || 'Lagos State Center'}</p>
+                      <span className="text-slate-400 font-bold block">
+                        State Center Location
+                      </span>
+                      <p className="font-black text-slate-800 mt-1">
+                        {selectedCandidate.state || "Lagos State Center"}
+                      </p>
                     </div>
                   </div>
 
                   {/* Activity Timers & Stats details */}
                   <div className="grid grid-cols-4 gap-2 text-center font-sans">
                     <div className="bg-white p-2 rounded-xl border border-slate-100">
-                      <p className="text-[9px] text-slate-400 font-bold">Total Time</p>
+                      <p className="text-[9px] text-slate-400 font-bold">
+                        Total Time
+                      </p>
                       <p className="font-black text-slate-900 text-3xs mt-1">
-                        {Math.floor((selectedCandidate.timeSpentMinutes || 0) / 60)}h {(selectedCandidate.timeSpentMinutes || 0) % 60}m
+                        {Math.floor(
+                          (selectedCandidate.timeSpentMinutes || 0) / 60,
+                        )}
+                        h {(selectedCandidate.timeSpentMinutes || 0) % 60}m
                       </p>
                     </div>
                     <div className="bg-white p-2 rounded-xl border border-slate-100">
-                      <p className="text-[9px] text-slate-400 font-bold">Accuracy</p>
-                      <p className="font-black text-emerald-600 font-mono text-3xs mt-1">{selectedCandidate.accuracy || 100}%</p>
+                      <p className="text-[9px] text-slate-400 font-bold">
+                        Accuracy
+                      </p>
+                      <p className="font-black text-emerald-600 font-mono text-3xs mt-1">
+                        {selectedCandidate.accuracy || 100}%
+                      </p>
                     </div>
                     <div className="bg-white p-2 rounded-xl border border-slate-100">
-                      <p className="text-[9px] text-slate-400 font-bold">Streak</p>
-                      <p className="font-black text-rose-500 text-3xs mt-1">🔥 {selectedCandidate.streak || 1}d</p>
+                      <p className="text-[9px] text-slate-400 font-bold">
+                        Streak
+                      </p>
+                      <p className="font-black text-rose-500 text-3xs mt-1">
+                        🔥 {selectedCandidate.streak || 1}d
+                      </p>
                     </div>
                     <div className="bg-white p-2 rounded-xl border border-slate-100">
-                      <p className="text-[9px] text-slate-400 font-bold">CBT Quizzes</p>
-                      <p className="font-black text-indigo-700 text-3xs mt-1">{selectedCandidate.totalQuizzes || 0}</p>
+                      <p className="text-[9px] text-slate-400 font-bold">
+                        CBT Quizzes
+                      </p>
+                      <p className="font-black text-indigo-700 text-3xs mt-1">
+                        {selectedCandidate.totalQuizzes || 0}
+                      </p>
                     </div>
                   </div>
 
                   {/* Subject score combinations Breakdown */}
                   <div className="space-y-2.5 bg-white p-4.5 rounded-2xl border border-slate-150/70 font-sans">
-                    <span className="font-display font-extrabold text-slate-800 text-3xs uppercase tracking-wider block">Completed Subject Combinations (Earned XP)</span>
+                    <span className="font-display font-extrabold text-slate-800 text-3xs uppercase tracking-wider block">
+                      Completed Subject Combinations (Earned XP)
+                    </span>
                     <div className="space-y-2">
-                      {Object.entries(selectedCandidate.subjectsStudied || {}).map(([subject, xp]) => (
+                      {Object.entries(
+                        selectedCandidate.subjectsStudied || {},
+                      ).map(([subject, xp]) => (
                         <div key={subject} className="space-y-1">
                           <div className="flex justify-between items-center text-3xs font-bold">
                             <span className="text-slate-700">{subject}</span>
-                            <span className="font-mono text-indigo-600">{String(xp)} Cumulative XP</span>
+                            <span className="font-mono text-indigo-600">
+                              {String(xp)} Cumulative XP
+                            </span>
                           </div>
                           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full ${subject === 'Mathematics' ? 'bg-indigo-600' : subject === 'English Language' ? 'bg-purple-600' : 'bg-amber-500'}`} 
-                              style={{ width: `${Math.min((Number(xp) / 1000) * 100, 100)}%` }}
+                            <div
+                              className={`h-full ${subject === "Mathematics" ? "bg-indigo-600" : subject === "English Language" ? "bg-purple-600" : "bg-amber-500"}`}
+                              style={{
+                                width: `${Math.min((Number(xp) / 1000) * 100, 100)}%`,
+                              }}
                             ></div>
                           </div>
                         </div>
                       ))}
-                      {Object.keys(selectedCandidate.subjectsStudied || {}).length === 0 && (
-                        <p className="text-4xs text-slate-400 italic">No subject sessions registered yet.</p>
+                      {Object.keys(selectedCandidate.subjectsStudied || {})
+                        .length === 0 && (
+                        <p className="text-4xs text-slate-400 italic">
+                          No subject sessions registered yet.
+                        </p>
                       )}
                     </div>
                   </div>
@@ -881,58 +1311,88 @@ export default function AdminPanel({
                         type="button"
                         onClick={() => {
                           const isPromoting = !selectedCandidate.isAdmin;
-                          const actionText = isPromoting ? "Promote user to Exam Admin" : "Revoke candidate Admin role";
+                          const actionText = isPromoting
+                            ? "Promote user to Exam Admin"
+                            : "Revoke candidate Admin role";
                           requestSecurityVerification(
                             "toggle_admin",
                             selectedCandidate.username,
                             actionText,
                             () => {
-                              setCandidates(prev => prev.map(c => {
-                                if (c.username === selectedCandidate.username) {
-                                  const updated = { ...c, isAdmin: !c.isAdmin };
-                                  setSelectedCandidate(updated);
-                                  saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
-                                  return updated;
-                                }
-                                return c;
-                              }));
-                              setMsg(`Administrative role updated for ${selectedCandidate.username}`);
-                              setTimeout(() => setMsg(''), 2500);
-                            }
+                              setCandidates((prev) =>
+                                prev.map((c) => {
+                                  if (
+                                    c.username === selectedCandidate.username
+                                  ) {
+                                    const updated = {
+                                      ...c,
+                                      isAdmin: !c.isAdmin,
+                                    };
+                                    setSelectedCandidate(updated);
+                                    saveUserToFirestore(updated).catch((err) =>
+                                      console.error("Cloud sync fail:", err),
+                                    );
+                                    return updated;
+                                  }
+                                  return c;
+                                }),
+                              );
+                              setMsg(
+                                `Administrative role updated for ${selectedCandidate.username}`,
+                              );
+                              setTimeout(() => setMsg(""), 2500);
+                            },
                           );
                         }}
-                        className={`py-2 px-3 border rounded-xl font-bold text-center transition cursor-pointer text-3xs uppercase tracking-wide ${selectedCandidate.isAdmin ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'}`}
+                        className={`py-2 px-3 border rounded-xl font-bold text-center transition cursor-pointer text-3xs uppercase tracking-wide ${selectedCandidate.isAdmin ? "bg-indigo-600 text-white border-indigo-600" : "bg-white hover:bg-slate-50 text-slate-600 border-slate-200"}`}
                       >
-                        {selectedCandidate.isAdmin ? '👑 Revoke Exam Admin Role' : '👥 Promote to Exam Admin'}
+                        {selectedCandidate.isAdmin
+                          ? "👑 Revoke Exam Admin Role"
+                          : "👥 Promote to Exam Admin"}
                       </button>
 
                       <button
                         type="button"
                         onClick={() => {
                           const isGranting = !selectedCandidate.isPremium;
-                          const actionText = isGranting ? "Grant Free Premium Upgrade" : "Revoke candidate Premium access";
+                          const actionText = isGranting
+                            ? "Grant Free Premium Upgrade"
+                            : "Revoke candidate Premium access";
                           requestSecurityVerification(
                             "toggle_premium",
                             selectedCandidate.username,
                             actionText,
                             () => {
-                              setCandidates(prev => prev.map(c => {
-                                if (c.username === selectedCandidate.username) {
-                                  const updated = { ...c, isPremium: !c.isPremium };
-                                  setSelectedCandidate(updated);
-                                  saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
-                                  return updated;
-                                }
-                                return c;
-                              }));
-                              setMsg(`Premium status updated for ${selectedCandidate.username}`);
-                              setTimeout(() => setMsg(''), 2500);
-                            }
+                              setCandidates((prev) =>
+                                prev.map((c) => {
+                                  if (
+                                    c.username === selectedCandidate.username
+                                  ) {
+                                    const updated = {
+                                      ...c,
+                                      isPremium: !c.isPremium,
+                                    };
+                                    setSelectedCandidate(updated);
+                                    saveUserToFirestore(updated).catch((err) =>
+                                      console.error("Cloud sync fail:", err),
+                                    );
+                                    return updated;
+                                  }
+                                  return c;
+                                }),
+                              );
+                              setMsg(
+                                `Premium status updated for ${selectedCandidate.username}`,
+                              );
+                              setTimeout(() => setMsg(""), 2500);
+                            },
                           );
                         }}
-                        className={`py-2 px-3 border rounded-xl font-bold text-center transition cursor-pointer text-3xs uppercase tracking-wide ${selectedCandidate.isPremium ? 'bg-amber-500 text-white border-amber-500' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'}`}
+                        className={`py-2 px-3 border rounded-xl font-bold text-center transition cursor-pointer text-3xs uppercase tracking-wide ${selectedCandidate.isPremium ? "bg-amber-500 text-white border-amber-500" : "bg-white hover:bg-slate-50 text-slate-600 border-slate-200"}`}
                       >
-                        {selectedCandidate.isPremium ? '💎 Revoke Premium Access' : '⭐ Grant Free Premium Upgrade'}
+                        {selectedCandidate.isPremium
+                          ? "💎 Revoke Premium Access"
+                          : "⭐ Grant Free Premium Upgrade"}
                       </button>
                     </div>
 
@@ -943,31 +1403,43 @@ export default function AdminPanel({
                         onClick={() => {
                           const usr = selectedCandidate.username;
                           const isBanning = !bannedUsers.includes(usr);
-                          const actionText = isBanning ? "Ban Candidate Account" : "Unban Candidate Account";
+                          const actionText = isBanning
+                            ? "Ban Candidate Account"
+                            : "Unban Candidate Account";
                           requestSecurityVerification(
                             "toggle_ban",
                             usr,
                             actionText,
                             () => {
                               toggleBanUser(usr);
-                              setCandidates(prev => prev.map(c => {
-                                if (c.username === usr) {
-                                  const isNowBanned = !bannedUsers.includes(usr);
-                                  const updated = { ...c, status: isNowBanned ? 'Banned' : 'Clean' };
-                                  setSelectedCandidate(updated);
-                                  saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
-                                  return updated;
-                                }
-                                return c;
-                              }));
+                              setCandidates((prev) =>
+                                prev.map((c) => {
+                                  if (c.username === usr) {
+                                    const isNowBanned =
+                                      !bannedUsers.includes(usr);
+                                    const updated = {
+                                      ...c,
+                                      status: isNowBanned ? "Banned" : "Clean",
+                                    };
+                                    setSelectedCandidate(updated);
+                                    saveUserToFirestore(updated).catch((err) =>
+                                      console.error("Cloud sync fail:", err),
+                                    );
+                                    return updated;
+                                  }
+                                  return c;
+                                }),
+                              );
                               setMsg(`Updated ban status of ${usr}`);
-                              setTimeout(() => setMsg(''), 2500);
-                            }
+                              setTimeout(() => setMsg(""), 2500);
+                            },
                           );
                         }}
-                        className={`flex-1 py-2 rounded-xl font-bold cursor-pointer transition text-3xs uppercase tracking-wide text-center ${bannedUsers.includes(selectedCandidate.username) ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-100'}`}
+                        className={`flex-1 py-2 rounded-xl font-bold cursor-pointer transition text-3xs uppercase tracking-wide text-center ${bannedUsers.includes(selectedCandidate.username) ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-100"}`}
                       >
-                        {bannedUsers.includes(selectedCandidate.username) ? '✓ Unban Account' : '⚠️ Ban Account'}
+                        {bannedUsers.includes(selectedCandidate.username)
+                          ? "✓ Unban Account"
+                          : "⚠️ Ban Account"}
                       </button>
 
                       <button
@@ -978,23 +1450,32 @@ export default function AdminPanel({
                             selectedCandidate.username,
                             "Boost Cumulative Level and XP parameters",
                             () => {
-                              setCandidates(prev => prev.map(c => {
-                                if (c.username === selectedCandidate.username) {
-                                  const updated = {
-                                    ...c,
-                                    level: (c.level || 1) + 1,
-                                    timeSpentMinutes: (c.timeSpentMinutes || 0) + 60,
-                                    xp: (c.xp || 100) + 250
-                                  };
-                                  setSelectedCandidate(updated);
-                                  saveUserToFirestore(updated).catch(err => console.error("Cloud sync fail:", err));
-                                  return updated;
-                                }
-                                return c;
-                              }));
-                              setMsg(`Level and cumulative experience points boosted for ${selectedCandidate.username}!`);
-                              setTimeout(() => setMsg(''), 2500);
-                            }
+                              setCandidates((prev) =>
+                                prev.map((c) => {
+                                  if (
+                                    c.username === selectedCandidate.username
+                                  ) {
+                                    const updated = {
+                                      ...c,
+                                      level: (c.level || 1) + 1,
+                                      timeSpentMinutes:
+                                        (c.timeSpentMinutes || 0) + 60,
+                                      xp: (c.xp || 100) + 250,
+                                    };
+                                    setSelectedCandidate(updated);
+                                    saveUserToFirestore(updated).catch((err) =>
+                                      console.error("Cloud sync fail:", err),
+                                    );
+                                    return updated;
+                                  }
+                                  return c;
+                                }),
+                              );
+                              setMsg(
+                                `Level and cumulative experience points boosted for ${selectedCandidate.username}!`,
+                              );
+                              setTimeout(() => setMsg(""), 2500);
+                            },
                           );
                         }}
                         className="py-2 px-3 bg-slate-900 text-slate-50 hover:bg-slate-850 rounded-xl font-bold transition cursor-pointer flex items-center gap-1 text-3xs uppercase tracking-wide"
@@ -1006,38 +1487,58 @@ export default function AdminPanel({
                       <button
                         type="button"
                         onClick={() => {
-                          if (confirm(`Are you sure you want to completely delete ${selectedCandidate.username}? This action is permanent.`)) {
+                          if (
+                            confirm(
+                              `Are you sure you want to completely delete ${selectedCandidate.username}? This action is permanent.`,
+                            )
+                          ) {
                             requestSecurityVerification(
                               "delete_user",
                               selectedCandidate.username,
                               "Completely Delete Candidate Profile from database roster",
                               () => {
                                 // Hit the backend user deletion endpoint to permanently delete from Postgres/Firestore
-                                fetch('/api/users/delete', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
+                                fetch("/api/users/delete", {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
                                   body: JSON.stringify({
                                     email: selectedCandidate.email,
-                                    id: selectedCandidate.id
+                                    id: selectedCandidate.id,
+                                  }),
+                                })
+                                  .then((res) => {
+                                    if (res.ok) {
+                                      console.log(
+                                        "Successfully removed candidate from database.",
+                                      );
+                                    } else {
+                                      console.error(
+                                        "Backend candidate deletion reported failure.",
+                                      );
+                                    }
                                   })
-                                })
-                                .then((res) => {
-                                  if (res.ok) {
-                                    console.log("Successfully removed candidate from database.");
-                                  } else {
-                                    console.error("Backend candidate deletion reported failure.");
-                                  }
-                                })
-                                .catch(err => {
-                                  console.error("Network error during candidate deletion:", err);
-                                });
+                                  .catch((err) => {
+                                    console.error(
+                                      "Network error during candidate deletion:",
+                                      err,
+                                    );
+                                  });
 
-                                const remaining = candidates.filter(c => c.username !== selectedCandidate.username);
+                                const remaining = candidates.filter(
+                                  (c) =>
+                                    c.username !== selectedCandidate.username,
+                                );
                                 setCandidates(remaining);
-                                setSelectedCandidate(remaining.length > 0 ? remaining[0] : null);
-                                setMsg('Account successfully deleted from database.');
-                                setTimeout(() => setMsg(''), 2500);
-                              }
+                                setSelectedCandidate(
+                                  remaining.length > 0 ? remaining[0] : null,
+                                );
+                                setMsg(
+                                  "Account successfully deleted from database.",
+                                );
+                                setTimeout(() => setMsg(""), 2500);
+                              },
                             );
                           }
                         }}
@@ -1047,34 +1548,42 @@ export default function AdminPanel({
                       </button>
                     </div>
                   </div>
-
                 </div>
               ) : (
                 <div className="h-44 flex items-center justify-center text-slate-400 font-bold">
-                  Select a candidate from the index to audit scores & combinations details.
+                  Select a candidate from the index to audit scores &
+                  combinations details.
                 </div>
               )}
             </div>
-
           </div>
-
         </div>
       )}
 
       {/* TAB 5: TOURNAMENTS & ANNOUNCEMENTS */}
-      {activeTab === 'announcements' && (
-        <div id="admin-ann-tab" className="space-y-6 pt-4 animate-fadeIn text-xs">
-          <form onSubmit={handleCreateAnnouncement} className="space-y-4 max-w-lg">
-            <h3 className="font-display font-bold text-slate-800 text-sm">Post Platform Announcement / Tournament</h3>
+      {activeTab === "announcements" && (
+        <div
+          id="admin-ann-tab"
+          className="space-y-6 pt-4 animate-fadeIn text-xs"
+        >
+          <form
+            onSubmit={handleCreateAnnouncement}
+            className="space-y-4 max-w-lg"
+          >
+            <h3 className="font-display font-bold text-slate-800 text-sm">
+              Post Platform Announcement / Tournament
+            </h3>
 
             <div className="space-y-1">
-              <label className="font-bold text-slate-600 block">Announcements Title</label>
+              <label className="font-bold text-slate-600 block">
+                Announcements Title
+              </label>
               <input
                 type="text"
                 required
                 placeholder="National Maths Fray Round this Saturday"
                 value={annTitle}
-                onChange={e => setAnnTitle(e.target.value)}
+                onChange={(e) => setAnnTitle(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2 px-3 focus:outline-hidden"
               />
             </div>
@@ -1083,7 +1592,7 @@ export default function AdminPanel({
               <label className="font-bold text-slate-600 block">Category</label>
               <select
                 value={annCat}
-                onChange={e => setAnnCat(e.target.value as any)}
+                onChange={(e) => setAnnCat(e.target.value as any)}
                 className="w-full bg-slate-50 border border-slate-200.5 rounded-xl py-2 px-3"
               >
                 <option value="Tournament">Tournament</option>
@@ -1093,13 +1602,15 @@ export default function AdminPanel({
             </div>
 
             <div className="space-y-1">
-              <label className="font-bold text-slate-600 block">Content Brief</label>
+              <label className="font-bold text-slate-600 block">
+                Content Brief
+              </label>
               <textarea
                 required
                 rows={3}
                 placeholder="Add announcement notes here..."
                 value={annContent}
-                onChange={e => setAnnContent(e.target.value)}
+                onChange={(e) => setAnnContent(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-250 focus:border-indigo-500 rounded-xl py-2 px-3 focus:outline-hidden"
               />
             </div>
@@ -1115,7 +1626,7 @@ export default function AdminPanel({
       )}
 
       {/* TAB 2.5: AI OCR EXTRACT SYSTEM */}
-      {activeTab === 'ocr_extract' && (
+      {activeTab === "ocr_extract" && (
         <OcrExtractorTab
           questionsList={questionsList}
           onAddQuestion={onAddQuestion}
@@ -1124,14 +1635,21 @@ export default function AdminPanel({
       )}
 
       {/* TAB 6: SUBJECT MANAGEMENT */}
-      {activeTab === 'subjects' && (
-        <div id="admin-subjects-tab" className="space-y-6 pt-4 animate-fadeIn text-xs max-w-lg font-sans">
+      {activeTab === "subjects" && (
+        <div
+          id="admin-subjects-tab"
+          className="space-y-6 pt-4 animate-fadeIn text-xs max-w-lg font-sans"
+        >
           <div className="space-y-2">
             <h3 className="font-display font-bold text-slate-800 text-sm flex items-center gap-1.5">
               <Book className="text-indigo-600 w-4.5 h-4.5" />
               Subjects Repository Manager
             </h3>
-            <p className="text-3xs text-slate-500">Add or strike off national subjects from the WAEC / JAMB CBT Simulators list. Deleted subjects will no longer be visible inside practice portals.</p>
+            <p className="text-3xs text-slate-500">
+              Add or strike off national subjects from the WAEC / JAMB CBT
+              Simulators list. Deleted subjects will no longer be visible inside
+              practice portals.
+            </p>
           </div>
 
           {/* Add Subject Widget */}
@@ -1142,37 +1660,39 @@ export default function AdminPanel({
               placeholder="e.g. Geography, Biology, Civic Education"
               className="flex-1 bg-white border border-slate-200.5 rounded-xl py-2.5 px-3 text-xs focus:outline-hidden"
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === "Enter") {
                   const input = e.currentTarget;
                   const val = input.value.trim();
                   if (val) {
                     if (subjectsList.includes(val)) {
-                      setMsg('Subject already exists!');
-                      setTimeout(() => setMsg(''), 2000);
+                      setMsg("Subject already exists!");
+                      setTimeout(() => setMsg(""), 2000);
                       return;
                     }
                     onAddSubject(val);
-                    input.value = '';
+                    input.value = "";
                     setMsg(`Subject '${val}' added to rosters successfully.`);
-                    setTimeout(() => setMsg(''), 2500);
+                    setTimeout(() => setMsg(""), 2500);
                   }
                 }
               }}
             />
             <button
               onClick={() => {
-                const input = document.getElementById('new-subject-name') as HTMLInputElement | null;
+                const input = document.getElementById(
+                  "new-subject-name",
+                ) as HTMLInputElement | null;
                 const val = input?.value.trim();
                 if (val) {
                   if (subjectsList.includes(val)) {
-                    setMsg('Subject already exists!');
-                    setTimeout(() => setMsg(''), 2000);
+                    setMsg("Subject already exists!");
+                    setTimeout(() => setMsg(""), 2000);
                     return;
                   }
                   onAddSubject(val);
-                  if (input) input.value = '';
+                  if (input) input.value = "";
                   setMsg(`Subject '${val}' added to rosters successfully.`);
-                  setTimeout(() => setMsg(''), 2500);
+                  setTimeout(() => setMsg(""), 2500);
                 }
               }}
               className="py-2.5 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl transition cursor-pointer flex items-center gap-1"
@@ -1183,24 +1703,37 @@ export default function AdminPanel({
 
           {/* Active subjects list */}
           <div className="space-y-2">
-            <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-1">Active WAEC / JAMB Subjects ({subjectsList.length})</span>
+            <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block mb-1">
+              Active WAEC / JAMB Subjects ({subjectsList.length})
+            </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {subjectsList.map(subj => (
-                <div key={subj} className="bg-white p-3 rounded-xl border border-slate-150 flex justify-between items-center group hover:border-slate-350 transition duration-150">
+              {subjectsList.map((subj) => (
+                <div
+                  key={subj}
+                  className="bg-white p-3 rounded-xl border border-slate-150 flex justify-between items-center group hover:border-slate-350 transition duration-150"
+                >
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-                    <span className="font-bold text-slate-800 text-xs">{subj}</span>
+                    <span className="font-bold text-slate-800 text-xs">
+                      {subj}
+                    </span>
                   </div>
                   <button
                     onClick={() => {
                       if (subjectsList.length <= 1) {
-                        alert('Warning: Core syllabus requires at least one registered subject list.');
+                        alert(
+                          "Warning: Core syllabus requires at least one registered subject list.",
+                        );
                         return;
                       }
-                      if (confirm(`Remove the subject '${subj}' from CBT database rosters? This will clear its visibility immediately.`)) {
+                      if (
+                        confirm(
+                          `Remove the subject '${subj}' from CBT database rosters? This will clear its visibility immediately.`,
+                        )
+                      ) {
                         onDeleteSubject(subj);
                         setMsg(`Subject '${subj}' removed.`);
-                        setTimeout(() => setMsg(''), 2500);
+                        setTimeout(() => setMsg(""), 2500);
                       }
                     }}
                     className="p-1 px-2 border border-slate-100 bg-slate-50 hover:bg-red-50 hover:text-red-600 text-slate-450 hover:border-red-100 rounded-lg transition duration-150 cursor-pointer"
@@ -1214,63 +1747,91 @@ export default function AdminPanel({
         </div>
       )}
 
-      {activeTab === 'otp' && (
-        <div id="admin-otp-tab" className="space-y-6 pt-4 animate-fadeIn text-xs w-full font-sans">
+      {activeTab === "otp" && (
+        <div
+          id="admin-otp-tab"
+          className="space-y-6 pt-4 animate-fadeIn text-xs w-full font-sans"
+        >
           <div className="space-y-2 text-left">
             <h3 className="font-display font-bold text-slate-800 text-sm flex items-center gap-1.5">
               <KeyRound className="text-indigo-600 w-4.5 h-4.5" />
               Administrative Security OTP Vault
             </h3>
             <p className="text-3xs text-slate-500">
-              Access dynamic, single-use security authorization codes required to execute database modifications (banning accounts, deleting logs, awarding premium keys).
+              Access dynamic, single-use security authorization codes required
+              to execute database modifications (banning accounts, deleting
+              logs, awarding premium keys).
             </p>
           </div>
 
           <div className="flex flex-col items-center justify-center w-full py-4">
             {!adminOtpGenerated ? (
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                if (!adminPasswordInput.trim()) {
-                  setAdminOtpError("Please input your administrator safety password.");
-                  return;
-                }
-                setAdminOtpVerifying(true);
-                setAdminOtpError('');
-                setAdminOtpSuccessMsg('');
-
-                const activeAdminMail = adminEmail || 'admin@waecmaster.edu.ng';
-
-                try {
-                  const resp = await fetch('/api/admin/generate-otp-with-password', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      email: activeAdminMail,
-                      password: adminPasswordInput.trim()
-                    })
-                  });
-
-                  const data = await resp.json();
-                  setAdminOtpVerifying(false);
-
-                  if (resp.ok && data.success) {
-                    setAdminOtpGenerated(data.code);
-                    setAdminOtpExpiresAt(data.expires);
-                    setAdminOtpTimeLeft(Math.max(0, Math.floor((data.expires - Date.now()) / 1000)));
-                    setAdminOtpSuccessMsg("One-Time Password generated successfully! Use it within 5 minutes.");
-                  } else {
-                    setAdminOtpError(data.error || "MFA validation failed. Incorrect credentials.");
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!adminPasswordInput.trim()) {
+                    setAdminOtpError(
+                      "Please input your administrator safety password.",
+                    );
+                    return;
                   }
-                } catch (err) {
-                  setAdminOtpVerifying(false);
-                  setAdminOtpError("Network or server connection issue while verifying security credentials.");
-                  console.error(err);
-                }
-              }} className="bg-white p-6 rounded-2xl border border-slate-150 space-y-4 shadow-xs w-full max-w-md flex flex-col items-center text-center">
+                  setAdminOtpVerifying(true);
+                  setAdminOtpError("");
+                  setAdminOtpSuccessMsg("");
+
+                  const activeAdminMail =
+                    adminEmail || "admin@waecmaster.edu.ng";
+
+                  try {
+                    const resp = await fetch(
+                      "/api/admin/generate-otp-with-password",
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          email: activeAdminMail,
+                          password: adminPasswordInput.trim(),
+                        }),
+                      },
+                    );
+
+                    const data = await resp.json();
+                    setAdminOtpVerifying(false);
+
+                    if (resp.ok && data.success) {
+                      setAdminOtpGenerated(data.code);
+                      setAdminOtpExpiresAt(data.expires);
+                      setAdminOtpTimeLeft(
+                        Math.max(
+                          0,
+                          Math.floor((data.expires - Date.now()) / 1000),
+                        ),
+                      );
+                      setAdminOtpSuccessMsg(
+                        "One-Time Password generated successfully! Use it within 5 minutes.",
+                      );
+                    } else {
+                      setAdminOtpError(
+                        data.error ||
+                          "MFA validation failed. Incorrect credentials.",
+                      );
+                    }
+                  } catch (err) {
+                    setAdminOtpVerifying(false);
+                    setAdminOtpError(
+                      "Network or server connection issue while verifying security credentials.",
+                    );
+                    console.error(err);
+                  }
+                }}
+                className="bg-white p-6 rounded-2xl border border-slate-150 space-y-4 shadow-xs w-full max-w-md flex flex-col items-center text-center"
+              >
                 <div className="flex flex-col items-center gap-2 text-center text-amber-600 bg-amber-50/70 border border-amber-100 p-3.5 rounded-xl w-full">
                   <Lock className="w-5 h-5 shrink-0 text-amber-500" />
                   <p className="text-3xs text-amber-800 font-medium leading-relaxed">
-                    To safeguard candidate profiles and CBT roster records from rogue updates, you must verify your account password to authorize a temporary One-Time Password.
+                    To safeguard candidate profiles and CBT roster records from
+                    rogue updates, you must verify your account password to
+                    authorize a temporary One-Time Password.
                   </p>
                 </div>
 
@@ -1285,7 +1846,7 @@ export default function AdminPanel({
                     value={adminPasswordInput}
                     onChange={(e) => {
                       setAdminPasswordInput(e.target.value);
-                      if (adminOtpError) setAdminOtpError('');
+                      if (adminOtpError) setAdminOtpError("");
                     }}
                     className="w-full max-w-xs bg-slate-50 border border-slate-205 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-xs focus:outline-hidden text-center"
                   />
@@ -1302,7 +1863,9 @@ export default function AdminPanel({
                   disabled={adminOtpVerifying || !adminPasswordInput.trim()}
                   className="w-full py-2.5 bg-slate-900 transition hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl font-bold cursor-pointer text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 border-none"
                 >
-                  {adminOtpVerifying ? 'Authenticating...' : '🔐 Generate Secure OTP'}
+                  {adminOtpVerifying
+                    ? "Authenticating..."
+                    : "🔐 Generate Secure OTP"}
                 </button>
               </form>
             ) : (
@@ -1314,7 +1877,9 @@ export default function AdminPanel({
                     ACTIVE DEPLOYED OTP
                   </span>
                   <p className="text-3xs text-slate-400 text-center">
-                    This safety code is valid for <strong>one-time use only</strong>. Using it to authorize an action will destroy it immediately.
+                    This safety code is valid for{" "}
+                    <strong>one-time use only</strong>. Using it to authorize an
+                    action will destroy it immediately.
                   </p>
                 </div>
 
@@ -1327,12 +1892,18 @@ export default function AdminPanel({
                 <div className="space-y-1.5 flex flex-col items-center">
                   <div className="text-3xs text-slate-500 flex justify-center items-center gap-1">
                     <span className="animate-ping w-1.5 h-1.5 rounded-full bg-rose-500 inline-block mr-1"></span>
-                    Expires in: <strong className="text-slate-800 font-extrabold">{Math.floor(adminOtpTimeLeft / 60).toString().padStart(2, '0')}:{(adminOtpTimeLeft % 60).toString().padStart(2, '0')}</strong>
+                    Expires in:{" "}
+                    <strong className="text-slate-800 font-extrabold">
+                      {Math.floor(adminOtpTimeLeft / 60)
+                        .toString()
+                        .padStart(2, "0")}
+                      :{(adminOtpTimeLeft % 60).toString().padStart(2, "0")}
+                    </strong>
                   </div>
-                  
+
                   {/* Visual horizontal completion countdown tracker */}
                   <div className="w-full bg-slate-100 rounded-full h-1 max-w-[200px] mx-auto overflow-hidden">
-                    <div 
+                    <div
                       className="bg-indigo-600 h-full transition-all duration-1000 ease-linear"
                       style={{ width: `${(adminOtpTimeLeft / 300) * 105}%` }}
                     ></div>
@@ -1353,7 +1924,7 @@ export default function AdminPanel({
                       setAdminOtpGenerated(null);
                       setAdminOtpExpiresAt(null);
                       setAdminOtpTimeLeft(0);
-                      setAdminOtpSuccessMsg('');
+                      setAdminOtpSuccessMsg("");
                     }}
                     className="flex-1 py-2 text-3xs font-extrabold text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-slate-100 rounded-xl transition uppercase cursor-pointer border border-slate-200.5"
                   >
@@ -1366,8 +1937,8 @@ export default function AdminPanel({
                       setAdminOtpGenerated(null);
                       setAdminOtpExpiresAt(null);
                       setAdminOtpTimeLeft(0);
-                      setAdminOtpSuccessMsg('');
-                      setAdminPasswordInput('');
+                      setAdminOtpSuccessMsg("");
+                      setAdminPasswordInput("");
                     }}
                     className="flex-1 py-2 text-3xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition uppercase cursor-pointer border-none"
                   >
@@ -1386,66 +1957,85 @@ export default function AdminPanel({
             <div className="flex items-center gap-2.5 text-rose-600">
               <ShieldAlert className="w-6 h-6 shrink-0" />
               <div>
-                <h3 className="font-black text-slate-800 text-sm leading-tight">Admin MFA Authorization</h3>
-                <p className="text-[10px] text-rose-500 font-extrabold uppercase tracking-wider mt-0.5">High-Security Action Requested</p>
+                <h3 className="font-black text-slate-800 text-sm leading-tight">
+                  Admin MFA Authorization
+                </h3>
+                <p className="text-[10px] text-rose-500 font-extrabold uppercase tracking-wider mt-0.5">
+                  High-Security Action Requested
+                </p>
               </div>
             </div>
 
             <div className="bg-rose-50 border border-rose-100/60 p-3.5 rounded-xl space-y-1.5 text-slate-700">
-              <p className="text-[10px] font-black text-rose-800 tracking-wider uppercase">Privileged Command:</p>
+              <p className="text-[10px] font-black text-rose-800 tracking-wider uppercase">
+                Privileged Command:
+              </p>
               <p className="font-bold text-slate-800 font-mono tracking-tight bg-white border border-rose-100 rounded-lg p-2 text-3xs">
-                {securityPendingAction.description} ({securityPendingAction.username})
+                {securityPendingAction.description} (
+                {securityPendingAction.username})
               </p>
             </div>
 
             <p className="text-slate-500 font-semibold leading-relaxed">
-              To complete this action, please enter the active 4-digit safety authorization code generated from your dynamic Admin <strong className="text-indigo-600 font-black">OTP tab</strong>.
+              To complete this action, please enter the active 4-digit safety
+              authorization code generated from your dynamic Admin{" "}
+              <strong className="text-indigo-600 font-black">OTP tab</strong>.
             </p>
 
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              if (otpCode.trim().length !== 4) {
-                setOtpError("Please input a valid 4-digit verification code.");
-                return;
-              }
-              setOtpSubmitting(true);
-              setOtpError('');
-
-              const activeAdminMail = adminEmail || 'admin@waecmaster.edu.ng';
-
-              fetch('/api/admin/verify-secure-code', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  email: activeAdminMail,
-                  code: otpCode.trim()
-                })
-              })
-              .then(resp => resp.json())
-              .then(data => {
-                setOtpSubmitting(false);
-                if (data.success) {
-                  // SUCCESS! Execute the pending action
-                  securityPendingAction.onVerify();
-                  // Reset states
-                  setSecurityPendingAction(null);
-                  setOtpSent(false);
-                  setOtpCode('');
-                  // Instantly discard the current generated OTP as it has been used once and rendered unusable
-                  setAdminOtpGenerated(null);
-                  setAdminOtpExpiresAt(null);
-                  setAdminOtpTimeLeft(0);
-                  setAdminOtpSuccessMsg('');
-                } else {
-                  setOtpError(data.error || 'Incorrect or expired code. Access denied.');
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (otpCode.trim().length !== 4) {
+                  setOtpError(
+                    "Please input a valid 4-digit verification code.",
+                  );
+                  return;
                 }
-              })
-              .catch(err => {
-                setOtpSubmitting(false);
-                setOtpError('Authorization check failed due to system connectivity issue.');
-                console.error(err);
-              });
-            }} className="space-y-4">
+                setOtpSubmitting(true);
+                setOtpError("");
+
+                const activeAdminMail = adminEmail || "admin@waecmaster.edu.ng";
+
+                fetch("/api/admin/verify-secure-code", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    email: activeAdminMail,
+                    code: otpCode.trim(),
+                  }),
+                })
+                  .then((resp) => resp.json())
+                  .then((data) => {
+                    setOtpSubmitting(false);
+                    if (data.success) {
+                      // SUCCESS! Execute the pending action
+                      securityPendingAction.onVerify();
+                      // Reset states
+                      setSecurityPendingAction(null);
+                      setOtpSent(false);
+                      setOtpCode("");
+                      // Instantly discard the current generated OTP as it has been used once and rendered unusable
+                      setAdminOtpGenerated(null);
+                      setAdminOtpExpiresAt(null);
+                      setAdminOtpTimeLeft(0);
+                      setAdminOtpSuccessMsg("");
+                    } else {
+                      setOtpError(
+                        data.error ||
+                          "Incorrect or expired code. Access denied.",
+                      );
+                    }
+                  })
+                  .catch((err) => {
+                    setOtpSubmitting(false);
+                    setOtpError(
+                      "Authorization check failed due to system connectivity issue.",
+                    );
+                    console.error(err);
+                  });
+              }}
+              className="space-y-4"
+            >
               <div className="space-y-1">
                 <div className="flex justify-between items-center">
                   <label className="block text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
@@ -1464,9 +2054,9 @@ export default function AdminPanel({
                   placeholder="e.g. 1234"
                   value={otpCode}
                   onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '');
+                    const val = e.target.value.replace(/\D/g, "");
                     setOtpCode(val);
-                    if (otpError) setOtpError('');
+                    if (otpError) setOtpError("");
                   }}
                   className="w-full text-center tracking-[1.5em] font-mono font-black text-xl py-3 border border-slate-250 focus:border-indigo-500 rounded-xl bg-slate-50/50 focus:outline-hidden transition"
                 />
@@ -1484,7 +2074,7 @@ export default function AdminPanel({
                   onClick={() => {
                     setSecurityPendingAction(null);
                     setOtpSent(false);
-                    setOtpCode('');
+                    setOtpCode("");
                   }}
                   className="flex-1 py-2.5 border border-slate-200.5 bg-slate-50 hover:bg-slate-100 rounded-xl font-bold transition text-3xs uppercase tracking-wide cursor-pointer"
                 >
@@ -1495,14 +2085,13 @@ export default function AdminPanel({
                   disabled={otpSubmitting || otpCode.length !== 4}
                   className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl font-bold transition text-3xs uppercase tracking-wide cursor-pointer flex items-center justify-center gap-1 border-none"
                 >
-                  {otpSubmitting ? 'Verifying...' : 'Authorize Edit'}
+                  {otpSubmitting ? "Verifying..." : "Authorize Edit"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 }

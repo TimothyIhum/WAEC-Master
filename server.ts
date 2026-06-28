@@ -10,11 +10,11 @@ import { fileURLToPath } from "url";
 dotenv.config();
 
 const { Pool } = pg;
-const databaseUrl = 
-  process.env.DATABASE_URL || 
-  process.env.SUPABASE_DATABASE_URL || 
-  process.env.SUPABASE_URL_NON_POOLING || 
-  process.env.POSTGRES_URL || 
+const databaseUrl =
+  process.env.DATABASE_URL ||
+  process.env.SUPABASE_DATABASE_URL ||
+  process.env.SUPABASE_URL_NON_POOLING ||
+  process.env.POSTGRES_URL ||
   process.env.NEON_DATABASE_URL;
 let pool: pg.Pool | null = null;
 
@@ -26,12 +26,16 @@ if (databaseUrl) {
         rejectUnauthorized: false,
       },
     });
-    console.log("PostgreSQL Database Pool (Supabase/Neon) configured successfully.");
+    console.log(
+      "PostgreSQL Database Pool (Supabase/Neon) configured successfully.",
+    );
   } catch (err) {
     console.error("PostgreSQL Database Pool initialization failed:", err);
   }
 } else {
-  console.warn("PostgreSQL Database Connection URL is missing. Falling back to Firestore/In-Memory mode.");
+  console.warn(
+    "PostgreSQL Database Connection URL is missing. Falling back to Firestore/In-Memory mode.",
+  );
 }
 
 let __filename = "";
@@ -47,27 +51,29 @@ try {
 }
 
 import { initializeApp as initFirebaseApp } from "firebase/app";
-import { 
-  getFirestore as getBackendFirestore, 
-  collection as fCol, 
-  doc as fDoc, 
-  getDocs as fGetDocs, 
-  getDoc as fGetDoc, 
-  setDoc as fSetDoc, 
-  updateDoc as fUpdateDoc, 
-  query as fQuery, 
+import {
+  getFirestore as getBackendFirestore,
+  collection as fCol,
+  doc as fDoc,
+  getDocs as fGetDocs,
+  getDoc as fGetDoc,
+  setDoc as fSetDoc,
+  updateDoc as fUpdateDoc,
+  query as fQuery,
   orderBy as fOrderBy,
-  deleteDoc as fDeleteDoc
+  deleteDoc as fDeleteDoc,
 } from "firebase/firestore";
 
 function loadFirebaseConfig() {
   const possiblePaths = [
-    path.join(process.cwd(), "firebase-applet-config.json")
+    path.join(process.cwd(), "firebase-applet-config.json"),
   ];
 
   if (__dirname) {
     possiblePaths.push(path.join(__dirname, "firebase-applet-config.json"));
-    possiblePaths.push(path.join(__dirname, "..", "firebase-applet-config.json"));
+    possiblePaths.push(
+      path.join(__dirname, "..", "firebase-applet-config.json"),
+    );
   }
 
   for (const p of possiblePaths) {
@@ -82,22 +88,53 @@ function loadFirebaseConfig() {
   }
 
   // Fallback default config if all files fail, preventing a crash on import
-  console.warn("Could not find firebase-applet-config.json. Using fallback config.");
+  console.warn(
+    "Could not find firebase-applet-config.json. Using fallback config.",
+  );
   return {
     projectId: process.env.FIREBASE_PROJECT_ID || "festive-backup-ff4nj",
-    appId: process.env.FIREBASE_APP_ID || "1:74787964544:web:ee8123d2c6e31661ccc865",
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "festive-backup-ff4nj.firebasestorage.app",
-    apiKey: process.env.FIREBASE_API_KEY || "AIzaSyAQXqUR58EddDWAOahtaeFW3lEMnDK-BCo",
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN || "festive-backup-ff4nj.firebaseapp.com",
+    appId:
+      process.env.FIREBASE_APP_ID || "1:74787964544:web:ee8123d2c6e31661ccc865",
+    storageBucket:
+      process.env.FIREBASE_STORAGE_BUCKET ||
+      "festive-backup-ff4nj.firebasestorage.app",
+    apiKey:
+      process.env.FIREBASE_API_KEY || "AIzaSyAQXqUR58EddDWAOahtaeFW3lEMnDK-BCo",
+    authDomain:
+      process.env.FIREBASE_AUTH_DOMAIN ||
+      "festive-backup-ff4nj.firebaseapp.com",
     firestoreDatabaseId: "ai-studio-8d057e99-47bc-4df2-954c-2ac39eea07cd",
     messagingSenderId: process.env.FIREBASE_SENDER_ID || "74787964544",
-    measurementId: ""
+    measurementId: "",
   };
 }
 
 const firebaseConfig = loadFirebaseConfig();
 const firebaseApp = initFirebaseApp(firebaseConfig);
-const db = getBackendFirestore(firebaseApp, (firebaseConfig as any).firestoreDatabaseId);
+const db = getBackendFirestore(
+  firebaseApp,
+  (firebaseConfig as any).firestoreDatabaseId,
+);
+
+const buildQuestionPaperMetadata = (question: any) => {
+  const normalizedExamName = (question.examName || "WAEC")
+    .toString()
+    .trim()
+    .toUpperCase();
+  const normalizedSubject = (question.subject || "General").toString().trim();
+  const normalizedYear = Number(question.examYear || new Date().getFullYear());
+  const safeSubjectSlug = normalizedSubject
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return {
+    paperId: `${normalizedExamName.toLowerCase()}-${safeSubjectSlug}-${normalizedYear}`,
+    paperTitle: `${normalizedExamName} ${normalizedSubject} ${normalizedYear}`,
+    examName: normalizedExamName === "JAMB" ? "JAMB" : "WAEC",
+    examYear: normalizedYear,
+  };
+};
 
 // In-Memory active verification codes datastore
 interface VerificationRecord {
@@ -107,27 +144,34 @@ interface VerificationRecord {
 const verificationCodes = new Map<string, VerificationRecord>();
 
 // Real email delivery helper using nodemailer
-const sendVerificationEmail = async (toEmail: string, code: string): Promise<{ success: boolean; error?: string }> => {
+const sendVerificationEmail = async (
+  toEmail: string,
+  code: string,
+): Promise<{ success: boolean; error?: string }> => {
   const host = process.env.SMTP_HOST || "smtp.gmail.com";
   const port = parseInt(process.env.SMTP_PORT || "465");
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
   if (!user || !pass) {
-    return { success: false, error: "SMTP credentials (SMTP_USER and SMTP_PASS) are not set in the .env environment secrets panel" };
+    return {
+      success: false,
+      error:
+        "SMTP credentials (SMTP_USER and SMTP_PASS) are not set in the .env environment secrets panel",
+    };
   }
 
   try {
     const isGmail = host.includes("gmail") || user.endsWith("@gmail.com");
     let transporter;
-    
+
     if (isGmail) {
       transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
           user,
-          pass
-        }
+          pass,
+        },
       });
     } else {
       transporter = nodemailer.createTransport({
@@ -136,8 +180,8 @@ const sendVerificationEmail = async (toEmail: string, code: string): Promise<{ s
         secure: port === 465,
         auth: {
           user,
-          pass
-        }
+          pass,
+        },
       });
     }
 
@@ -156,31 +200,31 @@ const sendVerificationEmail = async (toEmail: string, code: string): Promise<{ s
             <h1 style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 12px; margin-bottom: 4px; letter-spacing: -0.025em;">WAEC Master</h1>
             <p style="font-size: 11px; color: #6366f1; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin: 0;">Scholar CBT Verification</p>
           </div>
-          
+
           <p style="font-size: 14.5px; line-height: 1.6; color: #334155; margin-top: 0; margin-bottom: 16px;">
             Hello Candidate,
           </p>
           <p style="font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 24px;">
             Welcome to the WAEC Master preparatory board! Please use the following 4-digit verification token to establish your candidate account.
           </p>
-          
+
           <div style="text-align: center; margin-bottom: 28px;">
             <div style="display: inline-block; padding: 14px 28px; background-color: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 16px; font-size: 32px; font-weight: 900; letter-spacing: 0.15em; color: #312e81; font-family: 'Courier New', Courier, monospace;">
               ${code}
             </div>
             <p style="font-size: 11px; color: #ef4444; font-weight: 700; margin-top: 8px; margin-bottom: 0;">This code will expire in 24 hours.</p>
           </div>
-          
+
           <p style="font-size: 13px; line-height: 1.5; color: #64748b; margin-bottom: 24px;">
             If you did not request to sign up on WAEC Master CBT, you can safely ignore this automated message.
           </p>
-          
+
           <hr style="border: 0; border-top: 1px solid #f1f5f9; margin-bottom: 16px;" />
           <p style="font-size: 10px; text-align: center; color: #94a3b8; margin: 0;">
             © 2026 WAEC Master CBT Simulator. West African Examination Council Preparation Partner.
           </p>
         </div>
-      `
+      `,
     });
 
     return { success: true };
@@ -205,12 +249,12 @@ app.use((req, res, next) => {
   const whitelist = [
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://waecmaster.edu.ng"
+    "https://waecmaster.edu.ng",
   ];
   if (origin) {
-    const isAllowed = 
-      whitelist.includes(origin) || 
-      origin.startsWith("http://localhost:") || 
+    const isAllowed =
+      whitelist.includes(origin) ||
+      origin.startsWith("http://localhost:") ||
       origin.endsWith(".vercel.app") ||
       origin.includes(".run.app");
     if (isAllowed) {
@@ -221,17 +265,32 @@ app.use((req, res, next) => {
   } else {
     res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
   }
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With",
+  );
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS, PUT, DELETE",
+  );
   res.setHeader("Access-Control-Allow-Credentials", "true");
 
   // Helmet equivalent custom security policy headers
-  res.setHeader("Content-Security-Policy", "default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https: wss:; frame-ancestors 'self'; object-src 'none';");
-  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https: wss:; frame-ancestors 'self'; object-src 'none';",
+  );
+  res.setHeader(
+    "Strict-Transport-Security",
+    "max-age=31536000; includeSubDomains; preload",
+  );
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()",
+  );
   res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
   res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
@@ -243,20 +302,37 @@ app.use((req, res, next) => {
 });
 
 // 2. High-Performance Client Rate Limiter Subsystem
-const rateLimitMap = new Map<string, Map<string, { hits: number; lastReset: number }>>();
+const rateLimitMap = new Map<
+  string,
+  Map<string, { hits: number; lastReset: number }>
+>();
 
 const getClientIp = (req: any): string => {
-  return (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "127.0.0.1").toString().split(",")[0].trim();
+  return (
+    req.headers["x-forwarded-for"] ||
+    req.socket.remoteAddress ||
+    "127.0.0.1"
+  )
+    .toString()
+    .split(",")[0]
+    .trim();
 };
 
-const createRateLimiterMiddleware = (routeId: string, maxHitsPerMinute: number) => {
+const createRateLimiterMiddleware = (
+  routeId: string,
+  maxHitsPerMinute: number,
+) => {
   return (req: any, res: any, next: any) => {
     const ip = getClientIp(req);
-    
+
     // Immediate Active Firewall filter check
     if (serverBlockedIps.has(ip)) {
-      console.warn(`[WAF INTERVENTION] Dropped request from firewalled hacker IP: ${ip}`);
-      return res.status(403).json({ error: "Access Denied. Your IP address has been blocklisted by WAF." });
+      console.warn(
+        `[WAF INTERVENTION] Dropped request from firewalled hacker IP: ${ip}`,
+      );
+      return res.status(403).json({
+        error: "Access Denied. Your IP address has been blocklisted by WAF.",
+      });
     }
 
     let routeMap = rateLimitMap.get(routeId);
@@ -267,7 +343,7 @@ const createRateLimiterMiddleware = (routeId: string, maxHitsPerMinute: number) 
 
     const now = Date.now();
     let clientInfo = routeMap.get(ip);
-    
+
     if (!clientInfo) {
       clientInfo = { hits: 1, lastReset: now };
       routeMap.set(ip, clientInfo);
@@ -281,10 +357,12 @@ const createRateLimiterMiddleware = (routeId: string, maxHitsPerMinute: number) 
     }
 
     if (clientInfo.hits > maxHitsPerMinute) {
-      console.warn(`[LIMIT VIOLATED] Path: ${req.path}, IP: ${ip}, Hits/min: ${clientInfo.hits}`);
-      return res.status(429).json({ 
+      console.warn(
+        `[LIMIT VIOLATED] Path: ${req.path}, IP: ${ip}, Hits/min: ${clientInfo.hits}`,
+      );
+      return res.status(429).json({
         error: "Too many requests. Please slow down and try again.",
-        message: `Dynamic rate limiting is active on CBT endpoints to stave off bot storms.`
+        message: `Dynamic rate limiting is active on CBT endpoints to stave off bot storms.`,
       });
     }
 
@@ -297,12 +375,12 @@ const sanitizePayloadHtml = (data: any): any => {
   if (!data) return data;
   if (typeof data === "string") {
     return data
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/on\w+\s*=/gi, 'blocked_attr=')
-      .replace(/javascript:/gi, 'blocked_javascript:');
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+      .replace(/on\w+\s*=/gi, "blocked_attr=")
+      .replace(/javascript:/gi, "blocked_javascript:");
   }
   if (Array.isArray(data)) {
-    return data.map(item => sanitizePayloadHtml(item));
+    return data.map((item) => sanitizePayloadHtml(item));
   }
   if (typeof data === "object") {
     const sanitized: { [key: string]: any } = {};
@@ -321,101 +399,134 @@ app.use((req, res, next) => {
 });
 
 // API Auth code sending and verification
-app.post("/api/auth/send-verification-code", createRateLimiterMiddleware("auth", 10), async (req, res) => {
-  const { email } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: "Missing email address. Please enter your Gmail." });
-  }
+app.post(
+  "/api/auth/send-verification-code",
+  createRateLimiterMiddleware("auth", 10),
+  async (req, res) => {
+    const { email } = req.body;
+    if (!email) {
+      return res
+        .status(400)
+        .json({ error: "Missing email address. Please enter your Gmail." });
+    }
 
-  const cleanEmail = email.toLowerCase().trim();
-  // Secure 4 digit code (e.g., between 1000 and 9999).
-  const code = Math.floor(1000 + Math.random() * 9000).toString();
-  const expires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours limit
+    const cleanEmail = email.toLowerCase().trim();
+    // Secure 4 digit code (e.g., between 1000 and 9999).
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    const expires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours limit
 
-  verificationCodes.set(cleanEmail, { code, expires });
-  console.log(`\n==============================================\n[OTP DEBUG PORTAL]\nEMAIL: ${cleanEmail}\nVERIFICATION CODE: ${code}\n==============================================\n`);
+    verificationCodes.set(cleanEmail, { code, expires });
+    console.log(
+      `\n==============================================\n[OTP DEBUG PORTAL]\nEMAIL: ${cleanEmail}\nVERIFICATION CODE: ${code}\n==============================================\n`,
+    );
 
-  const sResult = await sendVerificationEmail(cleanEmail, code);
+    const sResult = await sendVerificationEmail(cleanEmail, code);
 
-  if (sResult.success) {
-    res.json({
-      success: true,
-      emailSent: true,
-      message: "A randomized 4-digit verification code was sent to your Gmail inbox! Please check your details."
-    });
-  } else {
-    // If SMTP credentials are not yet configured on AI Studio, let user play/onboard by providing a friendly debug notice and returning the code. But NO standard user is allowed to bypass with "000".
-    res.json({
-      success: true,
-      emailSent: false,
-      devCode: code,
-      message: `Code generated! (SMTP Not Set on Server - fallback code is: ${code})`,
-      error: sResult.error
-    });
-  }
-});
+    if (sResult.success) {
+      res.json({
+        success: true,
+        emailSent: true,
+        message:
+          "A randomized 4-digit verification code was sent to your Gmail inbox! Please check your details.",
+      });
+    } else {
+      // If SMTP credentials are not yet configured on AI Studio, let user play/onboard by providing a friendly debug notice and returning the code. But NO standard user is allowed to bypass with "000".
+      res.json({
+        success: true,
+        emailSent: false,
+        devCode: code,
+        message: `Code generated! (SMTP Not Set on Server - fallback code is: ${code})`,
+        error: sResult.error,
+      });
+    }
+  },
+);
 
-app.post("/api/auth/verify-code", createRateLimiterMiddleware("auth", 10), (req, res) => {
-  const { email, code } = req.body;
-  if (!email || !code) {
-    return res.status(400).json({ error: "Missing registration email or code." });
-  }
+app.post(
+  "/api/auth/verify-code",
+  createRateLimiterMiddleware("auth", 10),
+  (req, res) => {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res
+        .status(400)
+        .json({ error: "Missing registration email or code." });
+    }
 
-  const cleanEmail = email.toLowerCase().trim();
-  const cleanCode = code.trim();
-  const record = verificationCodes.get(cleanEmail);
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanCode = code.trim();
+    const record = verificationCodes.get(cleanEmail);
 
-  if (!record) {
-    return res.status(400).json({ error: "No verification process active for this registration. Try again." });
-  }
+    if (!record) {
+      return res.status(400).json({
+        error:
+          "No verification process active for this registration. Try again.",
+      });
+    }
 
-  if (Date.now() > record.expires) {
+    if (Date.now() > record.expires) {
+      verificationCodes.delete(cleanEmail);
+      return res.status(400).json({
+        error:
+          "Verification token expired. Please click resend to get a new code.",
+      });
+    }
+
+    // Explicitly block "000" or "0000"
+    if (cleanCode === "000" || cleanCode === "0000") {
+      return res.status(400).json({
+        error:
+          "Standard bypass '000' is strictly disabled for security. Type the real code sent to your Gmail.",
+      });
+    }
+
+    if (record.code !== cleanCode) {
+      return res
+        .status(400)
+        .json({ error: "Incorrect verification code. Access denied." });
+    }
+
+    // Success! Purge record.
     verificationCodes.delete(cleanEmail);
-    return res.status(400).json({ error: "Verification token expired. Please click resend to get a new code." });
-  }
-
-  // Explicitly block "000" or "0000"
-  if (cleanCode === "000" || cleanCode === "0000") {
-    return res.status(400).json({ error: "Standard bypass '000' is strictly disabled for security. Type the real code sent to your Gmail." });
-  }
-
-  if (record.code !== cleanCode) {
-    return res.status(400).json({ error: "Incorrect verification code. Access denied." });
-  }
-
-  // Success! Purge record.
-  verificationCodes.delete(cleanEmail);
-  res.json({ success: true, message: "Email code successfully verified!" });
-});
+    res.json({ success: true, message: "Email code successfully verified!" });
+  },
+);
 
 // Admin OTP CBT security mechanisms store and endpoints
 const adminActionCodes = new Map<string, VerificationRecord>();
 
-const sendAdminVerificationEmail = async (toEmail: string, code: string, actionDesc: string): Promise<{ success: boolean; error?: string }> => {
+const sendAdminVerificationEmail = async (
+  toEmail: string,
+  code: string,
+  actionDesc: string,
+): Promise<{ success: boolean; error?: string }> => {
   const host = process.env.SMTP_HOST || "smtp.gmail.com";
   const port = parseInt(process.env.SMTP_PORT || "465");
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
   if (!user || !pass) {
-    return { success: false, error: "SMTP credentials (SMTP_USER and SMTP_PASS) are not set" };
+    return {
+      success: false,
+      error: "SMTP credentials (SMTP_USER and SMTP_PASS) are not set",
+    };
   }
 
   try {
     const isGmail = host.includes("gmail") || user.endsWith("@gmail.com");
     let transporter;
-    
+
     if (isGmail) {
       transporter = nodemailer.createTransport({
         service: "gmail",
-        auth: { user, pass }
+        auth: { user, pass },
       });
     } else {
       transporter = nodemailer.createTransport({
         host,
         port,
         secure: port === 465,
-        auth: { user, pass }
+        auth: { user, pass },
       });
     }
 
@@ -449,7 +560,7 @@ const sendAdminVerificationEmail = async (toEmail: string, code: string, actionD
             This security code is only valid for 15 minutes. If you did not trigger this action, please audit your administrative sessions immediately.
           </p>
         </div>
-      `
+      `,
     });
 
     return { success: true };
@@ -470,15 +581,22 @@ app.post("/api/admin/send-secure-code", async (req, res) => {
   const expires = Date.now() + 15 * 60 * 1000; // 15 mins validity for safety
 
   adminActionCodes.set(cleanEmail, { code, expires });
-  console.log(`\n==============================================\n[ADMIN SECURITY SECURITY PORTAL]\nEMAIL: ${cleanEmail}\nACTION: ${actionDescription || 'N/A'}\nSECURITY CODE: ${code}\n==============================================\n`);
+  console.log(
+    `\n==============================================\n[ADMIN SECURITY SECURITY PORTAL]\nEMAIL: ${cleanEmail}\nACTION: ${actionDescription || "N/A"}\nSECURITY CODE: ${code}\n==============================================\n`,
+  );
 
-  const sResult = await sendAdminVerificationEmail(cleanEmail, code, actionDescription || "Modifying user record");
+  const sResult = await sendAdminVerificationEmail(
+    cleanEmail,
+    code,
+    actionDescription || "Modifying user record",
+  );
 
   if (sResult.success) {
     res.json({
       success: true,
       emailSent: true,
-      message: "An administrative 4-digit safety code was sent to your Gmail inbox! Please check your inbox/spam folder."
+      message:
+        "An administrative 4-digit safety code was sent to your Gmail inbox! Please check your inbox/spam folder.",
     });
   } else {
     res.json({
@@ -486,7 +604,7 @@ app.post("/api/admin/send-secure-code", async (req, res) => {
       emailSent: false,
       devCode: code,
       message: `Safety Code generated! (SMTP Not Set on Server - fallback code is: ${code})`,
-      error: sResult.error
+      error: sResult.error,
     });
   }
 });
@@ -494,7 +612,9 @@ app.post("/api/admin/send-secure-code", async (req, res) => {
 app.post("/api/admin/generate-otp-with-password", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
-    return res.status(400).json({ error: "Please enter your administrator email and password." });
+    return res
+      .status(400)
+      .json({ error: "Please enter your administrator email and password." });
   }
 
   const emailLower = email.toLowerCase().trim();
@@ -504,19 +624,22 @@ app.post("/api/admin/generate-otp-with-password", async (req, res) => {
     let isAdmin = false;
 
     if (pool) {
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         SELECT password_hash as "password", is_admin as "isAdmin"
         FROM users
         WHERE LOWER(email) = LOWER($1)
-      `, [emailLower]);
+      `,
+        [emailLower],
+      );
 
       if (result.rows.length > 0) {
         passwordHash = result.rows[0].password;
         isAdmin = Boolean(result.rows[0].isAdmin);
       }
     } else {
-      const userId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
-      const docRef = fDoc(db, 'users', userId);
+      const userId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, "_")}`;
+      const docRef = fDoc(db, "users", userId);
       const docSnap = await fGetDoc(docRef);
 
       if (docSnap.exists()) {
@@ -527,15 +650,23 @@ app.post("/api/admin/generate-otp-with-password", async (req, res) => {
     }
 
     if (passwordHash === undefined) {
-      return res.status(404).json({ error: "No administrator registered with this email address in the database." });
+      return res.status(404).json({
+        error:
+          "No administrator registered with this email address in the database.",
+      });
     }
 
     if (!isAdmin) {
-      return res.status(403).json({ error: "Access Denied. Elevated administrator status is required to access CBT OTPs." });
+      return res.status(403).json({
+        error:
+          "Access Denied. Elevated administrator status is required to access CBT OTPs.",
+      });
     }
 
     if (passwordHash !== password) {
-      return res.status(401).json({ error: "Incorrect administrator password. Access denied." });
+      return res
+        .status(401)
+        .json({ error: "Incorrect administrator password. Access denied." });
     }
 
     // Success! Let's generate a 4-digit code and save it
@@ -543,25 +674,30 @@ app.post("/api/admin/generate-otp-with-password", async (req, res) => {
     const expires = Date.now() + 5 * 60 * 1000; // lasts for 5 minutes
 
     adminActionCodes.set(emailLower, { code, expires });
-    console.log(`\n==============================================\n[ADMIN SECURITY OTP GENERATION]\nADMINE EMAIL: ${emailLower}\nSECURITY CODE: ${code} (expires in 5 mins, single use)\n==============================================\n`);
+    console.log(
+      `\n==============================================\n[ADMIN SECURITY OTP GENERATION]\nADMINE EMAIL: ${emailLower}\nSECURITY CODE: ${code} (expires in 5 mins, single use)\n==============================================\n`,
+    );
 
     res.json({
       success: true,
       code,
       expires,
-      message: "One-Time Password successfully generated!"
+      message: "One-Time Password successfully generated!",
     });
-
   } catch (err) {
     console.error("Failed to generate OTP with password:", err);
-    res.status(500).json({ error: "Internal server error during credential validation." });
+    res
+      .status(500)
+      .json({ error: "Internal server error during credential validation." });
   }
 });
 
 app.post("/api/admin/verify-secure-code", (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) {
-    return res.status(400).json({ error: "Missing administrator email or action security code." });
+    return res
+      .status(400)
+      .json({ error: "Missing administrator email or action security code." });
   }
 
   const cleanEmail = email.toLowerCase().trim();
@@ -569,47 +705,69 @@ app.post("/api/admin/verify-secure-code", (req, res) => {
   const record = adminActionCodes.get(cleanEmail);
 
   if (!record) {
-    return res.status(400).json({ error: "No security verification process is currently active for this administrator." });
+    return res.status(400).json({
+      error:
+        "No security verification process is currently active for this administrator.",
+    });
   }
 
   if (Date.now() > record.expires) {
     adminActionCodes.delete(cleanEmail);
-    return res.status(400).json({ error: "Administrative action code has expired. Please try the action again to generate a new code." });
+    return res.status(400).json({
+      error:
+        "Administrative action code has expired. Please try the action again to generate a new code.",
+    });
   }
 
   if (record.code !== cleanCode) {
-    return res.status(400).json({ error: "Incorrect administrative authorization code. Access denied." });
+    return res.status(400).json({
+      error: "Incorrect administrative authorization code. Access denied.",
+    });
   }
 
   // Success, purge
   adminActionCodes.delete(cleanEmail);
-  res.json({ success: true, message: "Administrative action verified successfully!" });
+  res.json({
+    success: true,
+    message: "Administrative action verified successfully!",
+  });
 });
 
 // A real authentication endpoint pointing directly to the Neon Database
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
-    return res.status(400).json({ error: "Please enter your email and password." });
+    return res
+      .status(400)
+      .json({ error: "Please enter your email and password." });
   }
 
   const emailLower = email.toLowerCase().trim();
 
   if (pool) {
     try {
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         SELECT id, username, email, password_hash as "password", avatar, xp, level, rank_tier as "rankTier", streak, accuracy, total_quizzes as "totalQuizzes", time_spent_minutes as "timeSpentMinutes", subjects_studied as "subjectsStudied", is_premium as "isPremium", is_admin as "isAdmin"
         FROM users
         WHERE LOWER(email) = LOWER($1)
-      `, [emailLower]);
+      `,
+        [emailLower],
+      );
 
       if (result.rows.length === 0) {
-        return res.status(404).json({ error: "No user registered with this email address in the database. Please sign up first." });
+        return res.status(404).json({
+          error:
+            "No user registered with this email address in the database. Please sign up first.",
+        });
       }
 
       const dbUser = result.rows[0];
       if (dbUser.password !== password) {
-        return res.status(401).json({ error: "Incorrect password. Please try again or click Forgot Password." });
+        return res.status(401).json({
+          error:
+            "Incorrect password. Please try again or click Forgot Password.",
+        });
       }
 
       // Successful login from Postgres
@@ -628,37 +786,48 @@ app.post("/api/auth/login", async (req, res) => {
           id: dbUser.id,
           username: dbUser.username,
           email: dbUser.email,
-          avatar: dbUser.avatar || '🎓',
+          avatar: dbUser.avatar || "🎓",
           level: Number(dbUser.level ?? 1),
           xp: Number(dbUser.xp ?? 0),
-          rankTier: dbUser.rankTier || 'Bronze Scholar',
+          rankTier: dbUser.rankTier || "Bronze Scholar",
           streak: Number(dbUser.streak ?? 1),
           accuracy: Number(dbUser.accuracy ?? 100),
           totalQuizzes: Number(dbUser.totalQuizzes ?? 0),
           timeSpentMinutes: Number(dbUser.timeSpentMinutes ?? 0),
           subjectsStudied: subjectsStudied || {},
           isPremium: Boolean(dbUser.isPremium),
-          isAdmin: Boolean(dbUser.isAdmin)
-        }
+          isAdmin: Boolean(dbUser.isAdmin),
+        },
       });
     } catch (err) {
-      console.error("Neon Postgres connection authentication check failed:", err);
-      return res.status(500).json({ error: "Database error during login. Please try again later." });
+      console.error(
+        "Neon Postgres connection authentication check failed:",
+        err,
+      );
+      return res.status(500).json({
+        error: "Database error during login. Please try again later.",
+      });
     }
   } else {
     // Falls back to direct Firestore checks as a robust secondary mode
     try {
-      const userId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
-      const docRef = fDoc(db, 'users', userId);
+      const userId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, "_")}`;
+      const docRef = fDoc(db, "users", userId);
       const docSnap = await fGetDoc(docRef);
 
       if (!docSnap.exists()) {
-        return res.status(404).json({ error: "No user registered with this email address. Please sign up first." });
+        return res.status(404).json({
+          error:
+            "No user registered with this email address. Please sign up first.",
+        });
       }
 
       const fUser = docSnap.data();
       if (fUser.password !== password) {
-        return res.status(401).json({ error: "Incorrect password. Please try again or click Forgot Password." });
+        return res.status(401).json({
+          error:
+            "Incorrect password. Please try again or click Forgot Password.",
+        });
       }
 
       return res.json({
@@ -667,22 +836,24 @@ app.post("/api/auth/login", async (req, res) => {
           id: userId,
           username: fUser.username,
           email: fUser.email,
-          avatar: fUser.avatar || '🎓',
+          avatar: fUser.avatar || "🎓",
           level: Number(fUser.level ?? 1),
           xp: Number(fUser.xp ?? 0),
-          rankTier: fUser.rankTier || 'Bronze Scholar',
+          rankTier: fUser.rankTier || "Bronze Scholar",
           streak: Number(fUser.streak ?? 1),
           accuracy: Number(fUser.accuracy ?? 100),
           totalQuizzes: Number(fUser.totalQuizzes ?? 0),
           timeSpentMinutes: Number(fUser.timeSpentMinutes ?? 0),
           subjectsStudied: fUser.subjectsStudied || {},
           isPremium: Boolean(fUser.isPremium ?? false),
-          isAdmin: Boolean(fUser.isAdmin ?? false)
-        }
+          isAdmin: Boolean(fUser.isAdmin ?? false),
+        },
       });
     } catch (err) {
       console.error("Firestore authentication system failed:", err);
-      return res.status(500).json({ error: "Authentication system offline. Please try again later." });
+      return res.status(500).json({
+        error: "Authentication system offline. Please try again later.",
+      });
     }
   }
 });
@@ -690,19 +861,21 @@ app.post("/api/auth/login", async (req, res) => {
 // In-Memory Global Datastores so multiple tabs can interact in real-time
 let announcements = [
   {
-    id: 'ann-1',
-    title: 'National WAEC CBT Tournaments',
-    content: 'Compete in the daily speed round this Saturday! Win custom Platinum badges and 500 bonus XP.',
-    timestamp: '2026-05-26T12:00:00Z',
-    category: 'Tournament' as const
+    id: "ann-1",
+    title: "National WAEC CBT Tournaments",
+    content:
+      "Compete in the daily speed round this Saturday! Win custom Platinum badges and 500 bonus XP.",
+    timestamp: "2026-05-26T12:00:00Z",
+    category: "Tournament" as const,
   },
   {
-    id: 'ann-2',
-    title: 'WAEC Timetable Released',
-    content: 'The official West African Examinations Council registration and timetable are out. Ensure you check your subject dates.',
-    timestamp: '2026-05-25T09:30:00Z',
-    category: 'Exam Update' as const
-  }
+    id: "ann-2",
+    title: "WAEC Timetable Released",
+    content:
+      "The official West African Examinations Council registration and timetable are out. Ensure you check your subject dates.",
+    timestamp: "2026-05-25T09:30:00Z",
+    category: "Exam Update" as const,
+  },
 ];
 
 let discussions = [
@@ -710,7 +883,8 @@ let discussions = [
     id: "post-1",
     author: "Kofi Mensah (Accra)",
     avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150",
-    content: "Who has a simpler trick for remembering the products of electrolysis of dilute NaCl? The cation discharge order is confusing me.",
+    content:
+      "Who has a simpler trick for remembering the products of electrolysis of dilute NaCl? The cation discharge order is confusing me.",
     subject: "Chemistry",
     timestamp: "2026-05-26T14:40:00Z",
     likes: 8,
@@ -718,34 +892,110 @@ let discussions = [
       {
         id: "rep-1",
         author: "Amina Dahiru",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-        content: "Remember the electrochemical series hierarchy! For cations: K+, Ca2+, Na+, Mg2+, Al3+, Zn2+, Fe2+, H+, Cu2+, Ag+. hydrogen discharges because dilute NaCl has abundant H+ ions which discharge lower down.",
-        timestamp: "2026-05-26T15:02:00Z"
-      }
-    ]
+        avatar:
+          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+        content:
+          "Remember the electrochemical series hierarchy! For cations: K+, Ca2+, Na+, Mg2+, Al3+, Zn2+, Fe2+, H+, Cu2+, Ag+. hydrogen discharges because dilute NaCl has abundant H+ ions which discharge lower down.",
+        timestamp: "2026-05-26T15:02:00Z",
+      },
+    ],
   },
   {
     id: "post-2",
     author: "Olumide Johnson (Lagos)",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-    content: "How many hours of calculus should we study daily to hit an A1 in Further Maths? Let's challenge ourselves!",
+    avatar:
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
+    content:
+      "How many hours of calculus should we study daily to hit an A1 in Further Maths? Let's challenge ourselves!",
     subject: "Mathematics",
     timestamp: "2026-05-26T11:15:00Z",
     likes: 12,
-    replies: []
-  }
+    replies: [],
+  },
 ];
 
 // Seed initial leaderboard entries. Will stay in memory, allowing users to climb.
 let leaderboardEntries = [
-  { username: "Sola_Lagos", avatar: "👤", xp: 2450, accuracy: 94, level: 12, school: "Kings College, Lagos", state: "Lagos", rankTier: "Diamond" },
-  { username: "Kofi_Accra", avatar: "🦁", xp: 2120, accuracy: 89, level: 10, school: "Achimota School", state: "Greater Accra", rankTier: "Platinum" },
-  { username: "Amina_Kano", avatar: "⭐", xp: 1980, accuracy: 91, level: 9, school: "Federal Govt Coll, Kano", state: "Kano", rankTier: "Platinum" },
-  { username: "Grace_Freetown", avatar: "🌸", xp: 1540, accuracy: 85, level: 7, school: "Prince of Wales Coll", state: "Western Area", rankTier: "Gold" },
-  { username: "Chinedu_Enugu", avatar: "⚡", xp: 1420, accuracy: 88, level: 6, school: "College of the Immaculate", state: "Enugu", rankTier: "Gold" },
-  { username: "Efe_Warri", avatar: "🔥", xp: 980, accuracy: 82, level: 5, school: "Government Coll, Ughelli", state: "Delta", rankTier: "Silver" },
-  { username: "Fatoumata_Banjul", avatar: "💎", xp: 750, accuracy: 80, level: 4, school: "Gambia High School", state: "Banjul", rankTier: "Silver" },
-  { username: "Kwame_Kumasi", avatar: "🛡️", xp: 450, accuracy: 76, level: 3, school: "Prempeh College", state: "Ashanti", rankTier: "Bronze" }
+  {
+    username: "Sola_Lagos",
+    avatar: "👤",
+    xp: 2450,
+    accuracy: 94,
+    level: 12,
+    school: "Kings College, Lagos",
+    state: "Lagos",
+    rankTier: "Diamond",
+  },
+  {
+    username: "Kofi_Accra",
+    avatar: "🦁",
+    xp: 2120,
+    accuracy: 89,
+    level: 10,
+    school: "Achimota School",
+    state: "Greater Accra",
+    rankTier: "Platinum",
+  },
+  {
+    username: "Amina_Kano",
+    avatar: "⭐",
+    xp: 1980,
+    accuracy: 91,
+    level: 9,
+    school: "Federal Govt Coll, Kano",
+    state: "Kano",
+    rankTier: "Platinum",
+  },
+  {
+    username: "Grace_Freetown",
+    avatar: "🌸",
+    xp: 1540,
+    accuracy: 85,
+    level: 7,
+    school: "Prince of Wales Coll",
+    state: "Western Area",
+    rankTier: "Gold",
+  },
+  {
+    username: "Chinedu_Enugu",
+    avatar: "⚡",
+    xp: 1420,
+    accuracy: 88,
+    level: 6,
+    school: "College of the Immaculate",
+    state: "Enugu",
+    rankTier: "Gold",
+  },
+  {
+    username: "Efe_Warri",
+    avatar: "🔥",
+    xp: 980,
+    accuracy: 82,
+    level: 5,
+    school: "Government Coll, Ughelli",
+    state: "Delta",
+    rankTier: "Silver",
+  },
+  {
+    username: "Fatoumata_Banjul",
+    avatar: "💎",
+    xp: 750,
+    accuracy: 80,
+    level: 4,
+    school: "Gambia High School",
+    state: "Banjul",
+    rankTier: "Silver",
+  },
+  {
+    username: "Kwame_Kumasi",
+    avatar: "🛡️",
+    xp: 450,
+    accuracy: 76,
+    level: 3,
+    school: "Prempeh College",
+    state: "Ashanti",
+    rankTier: "Bronze",
+  },
 ];
 
 // Lazy-initialized Gemini Client
@@ -758,9 +1008,9 @@ function getGeminiClient(): GoogleGenAI | null {
         apiKey: key,
         httpOptions: {
           headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
+            "User-Agent": "aistudio-build",
+          },
+        },
       });
     }
   }
@@ -782,7 +1032,7 @@ app.post("/api/announcements", (req, res) => {
     title,
     content,
     timestamp: new Date().toISOString(),
-    category: category || 'Tournament'
+    category: category || "Tournament",
   };
   announcements.unshift(newAnn);
   res.status(201).json(newAnn);
@@ -801,18 +1051,20 @@ app.get("/api/discussions", async (req, res) => {
         FROM discussion_replies
         ORDER BY created_at ASC
       `);
-      
+
       const posts = postsResult.rows.map((row: any) => ({
         id: row.id,
         author: row.author_username,
         avatar: row.author_avatar || "🎓",
         content: row.content,
         subject: row.subject,
-        timestamp: row.created_at ? row.created_at.toISOString() : new Date().toISOString(),
+        timestamp: row.created_at
+          ? row.created_at.toISOString()
+          : new Date().toISOString(),
         likes: row.likes || 0,
-        replies: [] as any[]
+        replies: [] as any[],
       }));
-      
+
       repliesResult.rows.forEach((row: any) => {
         const post = posts.find((p: any) => p.id === row.post_id);
         if (post) {
@@ -821,14 +1073,19 @@ app.get("/api/discussions", async (req, res) => {
             author: row.author_username,
             avatar: row.author_avatar || "🎓",
             content: row.content,
-            timestamp: row.created_at ? row.created_at.toISOString() : new Date().toISOString()
+            timestamp: row.created_at
+              ? row.created_at.toISOString()
+              : new Date().toISOString(),
           });
         }
       });
-      
+
       return res.json(posts);
     } catch (err) {
-      console.error("Neon Postgres discussion select failed, falling back to Firestore:", err);
+      console.error(
+        "Neon Postgres discussion select failed, falling back to Firestore:",
+        err,
+      );
     }
   }
 
@@ -858,35 +1115,57 @@ app.post("/api/discussions", async (req, res) => {
   }
   const postId = `post-${Date.now()}`;
   const nowStr = new Date().toISOString();
-  
+
   const newPost = {
     id: postId,
     author,
-    avatar: avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+    avatar:
+      avatar ||
+      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
     content,
     subject,
     timestamp: nowStr,
     likes: 0,
-    replies: []
+    replies: [],
   };
 
   // 1. Write to Postgres if pool is available
   if (pool) {
     try {
-      const emailLower = (author_email || `${author.toLowerCase().trim().replace(/\s+/g, '_')}@waecmaster.edu.ng`).toLowerCase().trim();
-      const legacyId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
-      
+      const emailLower = (
+        author_email ||
+        `${author.toLowerCase().trim().replace(/\s+/g, "_")}@waecmaster.edu.ng`
+      )
+        .toLowerCase()
+        .trim();
+      const legacyId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, "_")}`;
+
       // Ensure the author exists in users table to satisfy referencing key constraint
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO users (id, username, email, avatar)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (email) DO NOTHING
-      `, [legacyId, author, emailLower, avatar || '🎓']);
+      `,
+        [legacyId, author, emailLower, avatar || "🎓"],
+      );
 
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO discussion_posts (id, author_email, author_username, author_avatar, content, subject, likes, created_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      `, [postId, emailLower, author, avatar || '🎓', content, subject, 0, new Date()]);
+      `,
+        [
+          postId,
+          emailLower,
+          author,
+          avatar || "🎓",
+          content,
+          subject,
+          0,
+          new Date(),
+        ],
+      );
       console.log("Forum post inserted into Neon Postgres successfully.");
     } catch (err) {
       console.error("Failed to commit forum post to Postgres:", err);
@@ -910,11 +1189,14 @@ app.post("/api/discussions/:id/like", async (req, res) => {
   // 1. Update in Postgres
   if (pool) {
     try {
-      await pool.query(`
+      await pool.query(
+        `
         UPDATE discussion_posts
         SET likes = COALESCE(likes, 0) + 1
         WHERE id = $1
-      `, [postId]);
+      `,
+        [postId],
+      );
     } catch (err) {
       console.error("Postgres like counter update failed:", err);
     }
@@ -933,7 +1215,7 @@ app.post("/api/discussions/:id/like", async (req, res) => {
   } catch (err) {
     console.error("Firestore like error:", err);
   }
-  const post = discussions.find(d => d.id === postId);
+  const post = discussions.find((d) => d.id === postId);
   if (post) {
     post.likes += 1;
     return res.json(post);
@@ -949,22 +1231,27 @@ app.post("/api/discussions/:id/reply", async (req, res) => {
   }
   const replyId = `rep-${Date.now()}`;
   const nowStr = new Date().toISOString();
-  
+
   const newReply = {
     id: replyId,
     author,
-    avatar: avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+    avatar:
+      avatar ||
+      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
     content,
-    timestamp: nowStr
+    timestamp: nowStr,
   };
 
   // 1. Commit to Postgres
   if (pool) {
     try {
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO discussion_replies (id, post_id, author_username, author_avatar, content, created_at)
         VALUES ($1, $2, $3, $4, $5, $6)
-      `, [replyId, postId, author, avatar || '🎓', content, new Date()]);
+      `,
+        [replyId, postId, author, avatar || "🎓", content, new Date()],
+      );
       console.log("Forum reply inserted into Neon Postgres successfully.");
     } catch (err) {
       console.error("Postgres forum reply insertion failed:", err);
@@ -986,7 +1273,7 @@ app.post("/api/discussions/:id/reply", async (req, res) => {
   } catch (err) {
     console.error("Firestore reply error:", err);
   }
-  const post = discussions.find(d => d.id === postId);
+  const post = discussions.find((d) => d.id === postId);
   if (post) {
     post.replies.push(newReply);
     return res.json(post);
@@ -998,20 +1285,27 @@ app.post("/api/discussions/:id/reply", async (req, res) => {
 app.get("/api/users/profile", async (req, res) => {
   const { email } = req.query;
   if (!email) {
-    return res.status(400).json({ error: "Email query parameter is required." });
+    return res
+      .status(400)
+      .json({ error: "Email query parameter is required." });
   }
   const emailLower = (email as string).toLowerCase().trim();
 
   if (pool) {
     try {
-      const result = await pool.query(`
+      const result = await pool.query(
+        `
         SELECT id, username, email, password_hash as "password", avatar, xp, level, rank_tier as "rankTier", streak, accuracy, total_quizzes as "totalQuizzes", time_spent_minutes as "timeSpentMinutes", subjects_studied as "subjectsStudied", is_premium as "isPremium", is_admin as "isAdmin"
         FROM users
         WHERE LOWER(email) = LOWER($1)
-      `, [emailLower]);
+      `,
+        [emailLower],
+      );
 
       if (result.rows.length === 0) {
-        return res.status(404).json({ error: "User not found in Postgres database." });
+        return res
+          .status(404)
+          .json({ error: "User not found in Postgres database." });
       }
 
       const dbUser = result.rows[0];
@@ -1028,17 +1322,17 @@ app.get("/api/users/profile", async (req, res) => {
         id: dbUser.id,
         username: dbUser.username,
         email: dbUser.email,
-        avatar: dbUser.avatar || '🎓',
+        avatar: dbUser.avatar || "🎓",
         level: Number(dbUser.level ?? 1),
         xp: Number(dbUser.xp ?? 0),
-        rankTier: dbUser.rankTier || 'Bronze Scholar',
+        rankTier: dbUser.rankTier || "Bronze Scholar",
         streak: Number(dbUser.streak ?? 1),
         accuracy: Number(dbUser.accuracy ?? 100),
         totalQuizzes: Number(dbUser.totalQuizzes ?? 0),
         timeSpentMinutes: Number(dbUser.timeSpentMinutes ?? 0),
         subjectsStudied: subjectsStudied || {},
         isPremium: Boolean(dbUser.isPremium),
-        isAdmin: Boolean(dbUser.isAdmin)
+        isAdmin: Boolean(dbUser.isAdmin),
       });
     } catch (err) {
       console.error("Postgres profile fetch error:", err);
@@ -1047,12 +1341,14 @@ app.get("/api/users/profile", async (req, res) => {
 
   // Fallback to Firestore
   try {
-    const userId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
-    const docRef = fDoc(db, 'users', userId);
+    const userId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, "_")}`;
+    const docRef = fDoc(db, "users", userId);
     const docSnap = await fGetDoc(docRef);
 
     if (!docSnap.exists()) {
-      return res.status(404).json({ error: "User not found in Firestore database." });
+      return res
+        .status(404)
+        .json({ error: "User not found in Firestore database." });
     }
 
     const fUser = docSnap.data();
@@ -1069,21 +1365,23 @@ app.get("/api/users/profile", async (req, res) => {
       id: docSnap.id,
       username: fUser.username,
       email: fUser.email,
-      avatar: fUser.avatar || '🎓',
+      avatar: fUser.avatar || "🎓",
       level: Number(fUser.level ?? 1),
       xp: Number(fUser.xp ?? 0),
-      rankTier: fUser.rankTier || 'Bronze Scholar',
+      rankTier: fUser.rankTier || "Bronze Scholar",
       streak: Number(fUser.streak ?? 1),
       accuracy: Number(fUser.accuracy ?? 100),
       totalQuizzes: Number(fUser.totalQuizzes ?? 0),
       timeSpentMinutes: Number(fUser.timeSpentMinutes ?? 0),
       subjectsStudied: subjects || {},
       isPremium: Boolean(fUser.isPremium),
-      isAdmin: Boolean(fUser.isAdmin)
+      isAdmin: Boolean(fUser.isAdmin),
     });
   } catch (err) {
     console.error("Direct Firestore profile fetch error:", err);
-    return res.status(500).json({ error: "Direct Firestore profile load failed" });
+    return res
+      .status(500)
+      .json({ error: "Direct Firestore profile load failed" });
   }
 });
 
@@ -1096,7 +1394,10 @@ app.get("/api/users", async (req, res) => {
       `);
       return res.json(result.rows);
     } catch (err) {
-      console.error("Neon Postgres fetch users failed, falling back to Firestore:", err);
+      console.error(
+        "Neon Postgres fetch users failed, falling back to Firestore:",
+        err,
+      );
     }
   }
 
@@ -1116,15 +1417,19 @@ app.get("/api/users", async (req, res) => {
 app.post("/api/users/sync", async (req, res) => {
   const user = req.body;
   if (!user || !user.email) {
-    return res.status(400).json({ error: "Missing required user identity email parameters." });
+    return res
+      .status(400)
+      .json({ error: "Missing required user identity email parameters." });
   }
 
   const emailLower = user.email.toLowerCase().trim();
-  const userId = user.id || `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+  const userId =
+    user.id || `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, "_")}`;
 
   if (pool) {
     try {
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO users (
           id, username, email, password_hash, avatar, xp, level, rank_tier, streak, accuracy, total_quizzes, time_spent_minutes, subjects_studied, is_premium, is_admin, updated_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
@@ -1143,49 +1448,56 @@ app.post("/api/users/sync", async (req, res) => {
           is_premium = EXCLUDED.is_premium,
           is_admin = EXCLUDED.is_admin,
           updated_at = CURRENT_TIMESTAMP
-      `, [
-        userId,
-        user.username || 'Candidate',
-        emailLower,
-        user.password || null,
-        user.avatar || '🎓',
-        Number(user.xp ?? 0),
-        Number(user.level ?? 1),
-        user.rankTier || 'Bronze Scholar',
-        Number(user.streak ?? 1),
-        Number(user.accuracy ?? 100),
-        Number(user.totalQuizzes ?? 0),
-        Number(user.timeSpentMinutes ?? 0),
-        JSON.stringify(user.subjectsStudied || {}),
-        Boolean(user.isPremium ?? false),
-        Boolean(user.isAdmin ?? false)
-      ]);
-      console.log(`Saved user record for ${emailLower} directly to Neon Postgres DB.`);
+      `,
+        [
+          userId,
+          user.username || "Candidate",
+          emailLower,
+          user.password || null,
+          user.avatar || "🎓",
+          Number(user.xp ?? 0),
+          Number(user.level ?? 1),
+          user.rankTier || "Bronze Scholar",
+          Number(user.streak ?? 1),
+          Number(user.accuracy ?? 100),
+          Number(user.totalQuizzes ?? 0),
+          Number(user.timeSpentMinutes ?? 0),
+          JSON.stringify(user.subjectsStudied || {}),
+          Boolean(user.isPremium ?? false),
+          Boolean(user.isAdmin ?? false),
+        ],
+      );
+      console.log(
+        `Saved user record for ${emailLower} directly to Neon Postgres DB.`,
+      );
     } catch (err) {
       console.error("Failed to sync candidate to Neon Postgres DB:", err);
     }
   }
 
   try {
-    const docRef = fDoc(db, 'users', userId);
+    const docRef = fDoc(db, "users", userId);
     const payload = {
-      username: user.username || 'Candidate',
+      username: user.username || "Candidate",
       email: emailLower,
-      password: user.password || 'admin',
-      avatar: user.avatar || '🎓',
+      password: user.password || "admin",
+      avatar: user.avatar || "🎓",
       xp: Number(user.xp ?? 0),
       level: Number(user.level ?? 1),
-      rankTier: user.rankTier || 'Bronze Scholar',
+      rankTier: user.rankTier || "Bronze Scholar",
       streak: Number(user.streak ?? 1),
       accuracy: Number(user.accuracy ?? 100),
       totalQuizzes: Number(user.totalQuizzes ?? 0),
       timeSpentMinutes: Number(user.timeSpentMinutes ?? 0),
       subjectsStudied: user.subjectsStudied || {},
       isPremium: Boolean(user.isPremium ?? false),
-      isAdmin: Boolean(user.isAdmin ?? false)
+      isAdmin: Boolean(user.isAdmin ?? false),
     };
     await fSetDoc(docRef, payload);
-    res.json({ success: true, message: "User parameters synchronized successfully." });
+    res.json({
+      success: true,
+      message: "User parameters synchronized successfully.",
+    });
   } catch (err) {
     console.error("Firestore sync fallback failed:", err);
     res.json({ success: true, message: "Locally synchronized successfully." });
@@ -1195,16 +1507,21 @@ app.post("/api/users/sync", async (req, res) => {
 app.post("/api/users/delete", async (req, res) => {
   const { email, id } = req.body;
   if (!email) {
-    return res.status(400).json({ error: "Email is required to identify the user for deletion." });
+    return res
+      .status(400)
+      .json({ error: "Email is required to identify the user for deletion." });
   }
 
   const emailLower = email.toLowerCase().trim();
-  const userId = id || `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+  const userId = id || `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, "_")}`;
 
   // 1. Delete from PostgreSQL if pool is active
   if (pool) {
     try {
-      await pool.query("DELETE FROM users WHERE LOWER(email) = $1 OR id = $2", [emailLower, userId]);
+      await pool.query("DELETE FROM users WHERE LOWER(email) = $1 OR id = $2", [
+        emailLower,
+        userId,
+      ]);
       console.log(`Deleted user ${emailLower} from Neon Postgres DB.`);
     } catch (err) {
       console.error("Failed to delete user from Neon Postgres DB:", err);
@@ -1213,21 +1530,26 @@ app.post("/api/users/delete", async (req, res) => {
 
   // 2. Delete from Firestore
   try {
-    const docRef1 = fDoc(db, 'users', userId);
+    const docRef1 = fDoc(db, "users", userId);
     await fDeleteDoc(docRef1);
 
     // Also try directly with legacy format formatted from email
-    const alternateId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+    const alternateId = `legacy_${emailLower.replace(/[^a-zA-Z0-9_\-]/g, "_")}`;
     if (alternateId !== userId) {
-      const docRef2 = fDoc(db, 'users', alternateId);
+      const docRef2 = fDoc(db, "users", alternateId);
       await fDeleteDoc(docRef2);
     }
 
     console.log(`Deleted user ${emailLower} from Cloud Firestore.`);
-    res.json({ success: true, message: `Candidate with email ${emailLower} has been permanently deleted from both Postgres and Firestore.` });
+    res.json({
+      success: true,
+      message: `Candidate with email ${emailLower} has been permanently deleted from both Postgres and Firestore.`,
+    });
   } catch (err) {
     console.error("Firestore deletion failed:", err);
-    res.status(500).json({ error: "Failed to delete user from cloud synchronization fallback." });
+    res.status(500).json({
+      error: "Failed to delete user from cloud synchronization fallback.",
+    });
   }
 });
 
@@ -1235,20 +1557,27 @@ app.get("/api/questions", async (req, res) => {
   if (pool) {
     try {
       const result = await pool.query(`
-        SELECT id, subject, topic, type, text, options, correct_answer as "correctAnswer", explanation, hint, difficulty, marks, diagram_url as "diagramUrl", exam_name as "examName", exam_year as "examYear", question_number as "questionNumber", created_at
+        SELECT id, subject, topic, type, text, options, correct_answer as "correctAnswer", explanation, hint, difficulty, marks, diagram_url as "diagramUrl", exam_name as "examName", exam_year as "examYear", question_number as "questionNumber", paper_id as "paperId", paper_title as "paperTitle", source_file_name as "sourceFileName", created_at
         FROM questions
-        ORDER BY created_at DESC
+        ORDER BY exam_name ASC, subject ASC, exam_year DESC NULLS LAST, question_number ASC NULLS LAST, created_at DESC
       `);
-      if (result.rows.length > 0) {
-        return res.json(result.rows);
-      }
+      return res.json(result.rows);
     } catch (err) {
-      console.error("Neon Postgres fetch questions failed, falling back to Firestore/local:", err);
+      console.error(
+        "Neon Postgres fetch questions failed, falling back to Firestore/local:",
+        err,
+      );
     }
   }
 
   try {
-    const snap = await fGetDocs(fCol(db, "questions"));
+    const snap = await fGetDocs(
+      fQuery(
+        fCol(db, "questions"),
+        fOrderBy("examYear", "desc"),
+        fOrderBy("questionNumber", "asc"),
+      ),
+    );
     const cloudQuestions: any[] = [];
     snap.forEach((doc) => {
       cloudQuestions.push(doc.data());
@@ -1262,16 +1591,30 @@ app.get("/api/questions", async (req, res) => {
 
 app.post("/api/questions/sync", async (req, res) => {
   const q = req.body;
-  if (!q || !q.id || !q.subject) {
-    return res.status(400).json({ error: "Missing required question parameters." });
+  if (!q || !q.id || !q.subject || !q.text || !q.topic) {
+    return res
+      .status(400)
+      .json({ error: "Missing required question parameters." });
   }
+
+  const paperMeta = buildQuestionPaperMetadata(q);
+  const normalizedQuestion = {
+    ...q,
+    examName: paperMeta.examName,
+    examYear: paperMeta.examYear,
+    paperId: q.paperId || paperMeta.paperId,
+    paperTitle: q.paperTitle || paperMeta.paperTitle,
+    sourceFileName: q.sourceFileName || null,
+    questionNumber: q.questionNumber ? Number(q.questionNumber) : null,
+  };
 
   if (pool) {
     try {
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO questions (
-          id, subject, topic, type, text, options, correct_answer, explanation, hint, difficulty, marks, diagram_url, exam_name, exam_year, question_number, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
+          id, subject, topic, type, text, options, correct_answer, explanation, hint, difficulty, marks, diagram_url, exam_name, exam_year, question_number, paper_id, paper_title, source_file_name, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP)
         ON CONFLICT (id) DO UPDATE SET
           subject = EXCLUDED.subject,
           topic = EXCLUDED.topic,
@@ -1286,48 +1629,63 @@ app.post("/api/questions/sync", async (req, res) => {
           diagram_url = EXCLUDED.diagram_url,
           exam_name = EXCLUDED.exam_name,
           exam_year = EXCLUDED.exam_year,
-          question_number = EXCLUDED.question_number
-      `, [
-        q.id,
-        q.subject,
-        q.topic,
-        q.type,
-        q.text,
-        q.options ? JSON.stringify(q.options) : null,
-        q.correctAnswer,
-        q.explanation,
-        q.hint || null,
-        q.difficulty,
-        Number(q.marks || 1),
-        q.diagramUrl || null,
-        q.examName || null,
-        q.examYear ? Number(q.examYear) : null,
-        q.questionNumber ? Number(q.questionNumber) : null
-      ]);
-      console.log(`Saved question ${q.id} directly to Neon Postgres DB.`);
+          question_number = EXCLUDED.question_number,
+          paper_id = EXCLUDED.paper_id,
+          paper_title = EXCLUDED.paper_title,
+          source_file_name = EXCLUDED.source_file_name
+      `,
+        [
+          normalizedQuestion.id,
+          normalizedQuestion.subject,
+          normalizedQuestion.topic,
+          normalizedQuestion.type,
+          normalizedQuestion.text,
+          normalizedQuestion.options
+            ? JSON.stringify(normalizedQuestion.options)
+            : null,
+          normalizedQuestion.correctAnswer,
+          normalizedQuestion.explanation,
+          normalizedQuestion.hint || null,
+          normalizedQuestion.difficulty,
+          Number(normalizedQuestion.marks || 1),
+          normalizedQuestion.diagramUrl || null,
+          normalizedQuestion.examName,
+          normalizedQuestion.examYear,
+          normalizedQuestion.questionNumber,
+          normalizedQuestion.paperId,
+          normalizedQuestion.paperTitle,
+          normalizedQuestion.sourceFileName,
+        ],
+      );
+      console.log(
+        `Saved question ${normalizedQuestion.id} directly to Neon Postgres DB.`,
+      );
     } catch (err) {
       console.error("Failed to sync question to Neon Postgres DB:", err);
     }
   }
 
   try {
-    const docRef = fDoc(db, 'questions', q.id);
+    const docRef = fDoc(db, "questions", normalizedQuestion.id);
     await fSetDoc(docRef, {
-      id: q.id,
-      subject: q.subject,
-      topic: q.topic,
-      type: q.type,
-      text: q.text,
-      options: q.options || null,
-      correctAnswer: q.correctAnswer,
-      explanation: q.explanation,
-      hint: q.hint || null,
-      difficulty: q.difficulty,
-      marks: Number(q.marks || 1),
-      diagramUrl: q.diagramUrl || null,
-      examName: q.examName || null,
-      examYear: q.examYear ? Number(q.examYear) : null,
-      questionNumber: q.questionNumber ? Number(q.questionNumber) : null
+      id: normalizedQuestion.id,
+      subject: normalizedQuestion.subject,
+      topic: normalizedQuestion.topic,
+      type: normalizedQuestion.type,
+      text: normalizedQuestion.text,
+      options: normalizedQuestion.options || null,
+      correctAnswer: normalizedQuestion.correctAnswer,
+      explanation: normalizedQuestion.explanation,
+      hint: normalizedQuestion.hint || null,
+      difficulty: normalizedQuestion.difficulty,
+      marks: Number(normalizedQuestion.marks || 1),
+      diagramUrl: normalizedQuestion.diagramUrl || null,
+      examName: normalizedQuestion.examName,
+      examYear: normalizedQuestion.examYear,
+      questionNumber: normalizedQuestion.questionNumber,
+      paperId: normalizedQuestion.paperId,
+      paperTitle: normalizedQuestion.paperTitle,
+      sourceFileName: normalizedQuestion.sourceFileName,
     });
     res.json({ success: true, message: "Question synchronized successfully." });
   } catch (err) {
@@ -1336,70 +1694,119 @@ app.post("/api/questions/sync", async (req, res) => {
   }
 });
 
+app.post("/api/questions/delete", async (req, res) => {
+  const { id } = req.body;
+  if (!id) {
+    return res.status(400).json({ error: "Question id is required." });
+  }
+
+  if (pool) {
+    try {
+      await pool.query(`DELETE FROM questions WHERE id = $1`, [id]);
+    } catch (err) {
+      console.error("Failed to delete question from Neon Postgres DB:", err);
+    }
+  }
+
+  try {
+    await fDeleteDoc(fDoc(db, "questions", id));
+    return res.json({
+      success: true,
+      message: "Question deleted successfully.",
+    });
+  } catch (err) {
+    console.error("Firestore question deletion fallback failed:", err);
+    return res.json({
+      success: true,
+      message: "Question deleted from available stores where possible.",
+    });
+  }
+});
+
 app.get("/api/leaderboard", (req, res) => {
   res.json(leaderboardEntries);
 });
 
-app.post("/api/leaderboard/sync", createRateLimiterMiddleware("leaderboard", 60), (req, res) => {
-  const { username, avatar, xp, accuracy, level, school, state, rankTier } = req.body;
-  if (!username) return res.status(400).json({ error: "Missing username" });
+app.post(
+  "/api/leaderboard/sync",
+  createRateLimiterMiddleware("leaderboard", 60),
+  (req, res) => {
+    const { username, avatar, xp, accuracy, level, school, state, rankTier } =
+      req.body;
+    if (!username) return res.status(400).json({ error: "Missing username" });
 
-  // Anti-Cheat input bounds validation
-  const cleanAccuracy = parseFloat(accuracy || "80");
-  if (!isNaN(cleanAccuracy) && (cleanAccuracy > 100 || cleanAccuracy < 0)) {
-    return res.status(400).json({ error: "Invalid scoring bounds! Accuracy must reside between 0% and 100%." });
-  }
-
-  const cleanXp = parseInt(xp || "0") || 0;
-  if (cleanXp > 150000) {
-    return res.status(400).json({ error: "Scoring telemetry flagged! XP growth exceeds historical candidate bounds." });
-  }
-
-  const existIndex = leaderboardEntries.findIndex(e => e.username === username);
-  if (existIndex !== -1) {
-    // Prevent down-grading, but block impossible spikes
-    const oldXp = leaderboardEntries[existIndex].xp;
-    if (cleanXp - oldXp > 8000) {
-      console.warn(`[ANTI-CHEAT FLAGGED] Account: ${username} tried to increment by ${cleanXp - oldXp} XP in one sync!`);
+    // Anti-Cheat input bounds validation
+    const cleanAccuracy = parseFloat(accuracy || "80");
+    if (!isNaN(cleanAccuracy) && (cleanAccuracy > 100 || cleanAccuracy < 0)) {
+      return res.status(400).json({
+        error:
+          "Invalid scoring bounds! Accuracy must reside between 0% and 100%.",
+      });
     }
-    leaderboardEntries[existIndex] = {
-      username,
-      avatar: avatar || "👤",
-      xp: Math.max(leaderboardEntries[existIndex].xp, cleanXp),
-      accuracy: cleanAccuracy || leaderboardEntries[existIndex].accuracy,
-      level: Math.max(leaderboardEntries[existIndex].level, level || 1),
-      school: school || leaderboardEntries[existIndex].school,
-      state: state || leaderboardEntries[existIndex].state,
-      rankTier: rankTier || leaderboardEntries[existIndex].rankTier
-    };
-  } else {
-    leaderboardEntries.push({
-      username,
-      avatar: avatar || "👤",
-      xp: cleanXp,
-      accuracy: cleanAccuracy || 80,
-      level: level || 1,
-      school: school || "Undecided School",
-      state: state || "Lagos",
-      rankTier: rankTier || "Bronze"
-    });
-  }
 
-  // Sort by XP descending
-  leaderboardEntries.sort((a, b) => b.xp - a.xp);
-  res.json({ success: true, leaderboard: leaderboardEntries });
-});
+    const cleanXp = parseInt(xp || "0") || 0;
+    if (cleanXp > 150000) {
+      return res.status(400).json({
+        error:
+          "Scoring telemetry flagged! XP growth exceeds historical candidate bounds.",
+      });
+    }
+
+    const existIndex = leaderboardEntries.findIndex(
+      (e) => e.username === username,
+    );
+    if (existIndex !== -1) {
+      // Prevent down-grading, but block impossible spikes
+      const oldXp = leaderboardEntries[existIndex].xp;
+      if (cleanXp - oldXp > 8000) {
+        console.warn(
+          `[ANTI-CHEAT FLAGGED] Account: ${username} tried to increment by ${cleanXp - oldXp} XP in one sync!`,
+        );
+      }
+      leaderboardEntries[existIndex] = {
+        username,
+        avatar: avatar || "👤",
+        xp: Math.max(leaderboardEntries[existIndex].xp, cleanXp),
+        accuracy: cleanAccuracy || leaderboardEntries[existIndex].accuracy,
+        level: Math.max(leaderboardEntries[existIndex].level, level || 1),
+        school: school || leaderboardEntries[existIndex].school,
+        state: state || leaderboardEntries[existIndex].state,
+        rankTier: rankTier || leaderboardEntries[existIndex].rankTier,
+      };
+    } else {
+      leaderboardEntries.push({
+        username,
+        avatar: avatar || "👤",
+        xp: cleanXp,
+        accuracy: cleanAccuracy || 80,
+        level: level || 1,
+        school: school || "Undecided School",
+        state: state || "Lagos",
+        rankTier: rankTier || "Bronze",
+      });
+    }
+
+    // Sort by XP descending
+    leaderboardEntries.sort((a, b) => b.xp - a.xp);
+    res.json({ success: true, leaderboard: leaderboardEntries });
+  },
+);
 
 // AI STUDY ASSISTANT TUTOR API
-app.post("/api/gemini/tutor", createRateLimiterMiddleware("tutor", 15), async (req, res) => {
-  const { subject, questionText, studentQuery, topic, history } = req.body;
+app.post(
+  "/api/gemini/tutor",
+  createRateLimiterMiddleware("tutor", 15),
+  async (req, res) => {
+    const { subject, questionText, studentQuery, topic, history } = req.body;
 
-  const currentClient = getGeminiClient();
+    const currentClient = getGeminiClient();
 
-  if (!currentClient) {
-    // Elegant fallback simulation if API key is not supplied
-    console.log("No Gemini API Key found. Returning highly customized offline education response.");
-    const customAdvice = `Hello there! I'm your offline WAEC Mentor. To activate my customized neural-intelligence solving, please set a valid GEMINI_API_KEY inside the Secrets/Environment panel. 
+    if (!currentClient) {
+      // Elegant fallback simulation if API key is not supplied
+      console.log(
+        "No Gemini API Key found. Returning highly customized offline education response.",
+      );
+      const customAdvice = `Hello there! I'm your offline WAEC Mentor. To activate my customized neural-intelligence solving, please set a valid GEMINI_API_KEY inside the Secrets/Environment panel.
 
 However, looking on your query on **${subject || "General Study"}** (Topic: *${topic || "General"}*):
 Let's break this down conceptually. In WAEC examinations, success comes from step-by-step clarity. Here's a customized strategy:
@@ -1410,11 +1817,11 @@ Let's break this down conceptually. In WAEC examinations, success comes from ste
 4. **Practice actively**: Answer 15 practice CBT quizzes on this topic to solidify your memory!
 
 Would you like to ask another academic topic question? Keep study hours consistent, you are destined for parallel A1s!`;
-    return res.json({ text: customAdvice, isMock: true });
-  }
+      return res.json({ text: customAdvice, isMock: true });
+    }
 
-  try {
-    const defaultContext = `You are "WAEC Master AI Exam Coach", an encouraging, deeply smart, secondary school academic mentor designed for students in West Africa (Nigeria, Ghana, Sierra Leone, The Gambia, Liberia).
+    try {
+      const defaultContext = `You are "WAEC Master AI Exam Coach", an encouraging, deeply smart, secondary school academic mentor designed for students in West Africa (Nigeria, Ghana, Sierra Leone, The Gambia, Liberia).
 Your goal is to explain difficult academic concepts in Mathematics, English, Physics, Chemistry, Biology, Economics, Government, etc.
 Adopt a warm, encouraging African-tutor tone (highly friendly, uses encouraging terms like "Excellent", "My champion", "My star candidate", "You have this in you!", "Parallel A1 is yours!").
 Provide step-by-step bullet points, structured math expansions, and clear explanations. Use West African references (e.g. naira, cedis, garri, local contexts) where helpful for illustration.
@@ -1435,68 +1842,80 @@ Current WAEC Question under review: ${questionText || "None"}
 Student's request: ${studentQuery}
 `;
 
-    const chatHistory = history || [];
-    const formattedContents = chatHistory.length > 0 
-      ? [...chatHistory.map((h: any) => ({
-          role: h.role,
-          parts: [{ text: h.text }]
-        })), { role: "user", parts: [{ text: defaultContext }] }]
-      : defaultContext;
+      const chatHistory = history || [];
+      const formattedContents =
+        chatHistory.length > 0
+          ? [
+              ...chatHistory.map((h: any) => ({
+                role: h.role,
+                parts: [{ text: h.text }],
+              })),
+              { role: "user", parts: [{ text: defaultContext }] },
+            ]
+          : defaultContext;
 
-    const response = await currentClient.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: formattedContents,
-    });
+      const response = await currentClient.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: formattedContents,
+      });
 
-    res.json({ text: response.text });
-  } catch (err: any) {
-    console.error("Gemini API tutor generation failed:", err);
-    res.status(500).json({ error: "Failed to communicate with AI Tutor: " + err.message });
-  }
-});
+      res.json({ text: response.text });
+    } catch (err: any) {
+      console.error("Gemini API tutor generation failed:", err);
+      res
+        .status(500)
+        .json({ error: "Failed to communicate with AI Tutor: " + err.message });
+    }
+  },
+);
 
 // BULK GENERATE QUESTIONS FROM GEMINI (ADMIN WORKSPACE)
-app.post("/api/gemini/generate-questions", createRateLimiterMiddleware("admin", 10), async (req, res) => {
-  const { subject, topic, count } = req.body;
-  const currentClient = getGeminiClient();
-  const quantity = Math.min(count || 3, 5);
+app.post(
+  "/api/gemini/generate-questions",
+  createRateLimiterMiddleware("admin", 10),
+  async (req, res) => {
+    const { subject, topic, count } = req.body;
+    const currentClient = getGeminiClient();
+    const quantity = Math.min(count || 3, 5);
 
-  if (!currentClient) {
-    // Return sample custom generated questions
-    return res.json({
-      isMock: true,
-      questions: [
-        {
-          id: `ai-gen-${Date.now()}-1`,
-          subject: subject || "Physics",
-          topic: topic || "Waves",
-          type: "mcq",
-          text: `Which of the following characteristics determines the pitch of a sound wave circulating in air?`,
-          options: ["Amplitude", "Frequency", "Wavelength", "Velocity"],
-          correctAnswer: "1",
-          explanation: "The pitch of a sound wave is determined solely by its frequency. A higher frequency produces a higher pitch, whereas amplitude determines its loudness.",
-          hint: "Think about why a child's voice has a higher pitch than an adult's.",
-          difficulty: "Easy",
-          marks: 3
-        },
-        {
-          id: `ai-gen-${Date.now()}-2`,
-          subject: subject || "Physics",
-          topic: topic || "Waves",
-          type: "fill_in_the_blank",
-          text: "What is the unit of measurement for electrical frequency?",
-          correctAnswer: "hertz",
-          explanation: "The frequency of waves (including electric currents) is measured in hertz (Hz), representing cycles per second.",
-          hint: "The unit is abbreviated as Hz.",
-          difficulty: "Easy",
-          marks: 2
-        }
-      ]
-    });
-  }
+    if (!currentClient) {
+      // Return sample custom generated questions
+      return res.json({
+        isMock: true,
+        questions: [
+          {
+            id: `ai-gen-${Date.now()}-1`,
+            subject: subject || "Physics",
+            topic: topic || "Waves",
+            type: "mcq",
+            text: `Which of the following characteristics determines the pitch of a sound wave circulating in air?`,
+            options: ["Amplitude", "Frequency", "Wavelength", "Velocity"],
+            correctAnswer: "1",
+            explanation:
+              "The pitch of a sound wave is determined solely by its frequency. A higher frequency produces a higher pitch, whereas amplitude determines its loudness.",
+            hint: "Think about why a child's voice has a higher pitch than an adult's.",
+            difficulty: "Easy",
+            marks: 3,
+          },
+          {
+            id: `ai-gen-${Date.now()}-2`,
+            subject: subject || "Physics",
+            topic: topic || "Waves",
+            type: "fill_in_the_blank",
+            text: "What is the unit of measurement for electrical frequency?",
+            correctAnswer: "hertz",
+            explanation:
+              "The frequency of waves (including electric currents) is measured in hertz (Hz), representing cycles per second.",
+            hint: "The unit is abbreviated as Hz.",
+            difficulty: "Easy",
+            marks: 2,
+          },
+        ],
+      });
+    }
 
-  try {
-    const prompt = `Generate exactly ${quantity} WAEC style CBT questions for the subject "${subject}" under the topic "${topic}".
+    try {
+      const prompt = `Generate exactly ${quantity} WAEC style CBT questions for the subject "${subject}" under the topic "${topic}".
 Each question MUST be returned inside a JSON array that matches the following TypeScript structure exactly:
 interface Question {
   id: string; // custom unique string
@@ -1514,191 +1933,222 @@ interface Question {
 
 Generate challenging WAEC questions. Ensure the output is strictly parseable JSON, with no markdown tags surrounding it except maybe a valid json spec. Be extremely strict.`;
 
-    const response = await currentClient.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              subject: { type: Type.STRING },
-              topic: { type: Type.STRING },
-              type: { type: Type.STRING },
-              text: { type: Type.STRING },
-              options: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
+      const response = await currentClient.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                subject: { type: Type.STRING },
+                topic: { type: Type.STRING },
+                type: { type: Type.STRING },
+                text: { type: Type.STRING },
+                options: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                },
+                correctAnswer: { type: Type.STRING },
+                explanation: { type: Type.STRING },
+                hint: { type: Type.STRING },
+                difficulty: { type: Type.STRING },
+                marks: { type: Type.NUMBER },
               },
-              correctAnswer: { type: Type.STRING },
-              explanation: { type: Type.STRING },
-              hint: { type: Type.STRING },
-              difficulty: { type: Type.STRING },
-              marks: { type: Type.NUMBER }
+              required: [
+                "id",
+                "subject",
+                "topic",
+                "type",
+                "text",
+                "correctAnswer",
+                "explanation",
+                "difficulty",
+                "marks",
+              ],
             },
-            required: ["id", "subject", "topic", "type", "text", "correctAnswer", "explanation", "difficulty", "marks"]
-          }
-        }
-      }
-    });
+          },
+        },
+      });
 
-    const parsed = JSON.parse(response.text || "[]");
-    res.json({ questions: parsed });
-  } catch (err: any) {
-    console.error("Gemini AI Questions Bulk Generator failed:", err);
-    res.status(500).json({ error: "Failed to generate questions: " + err.message });
-  }
-});
+      const parsed = JSON.parse(response.text || "[]");
+      res.json({ questions: parsed });
+    } catch (err: any) {
+      console.error("Gemini AI Questions Bulk Generator failed:", err);
+      res
+        .status(500)
+        .json({ error: "Failed to generate questions: " + err.message });
+    }
+  },
+);
 
 // INTELLIGENT OCR QUESTION EXTRACTION ROUTE
-app.post("/api/gemini/extract-questions", createRateLimiterMiddleware("ocr", 30), async (req, res) => {
-  const { image, images, fileName, subjectHint } = req.body;
-  const currentClient = getGeminiClient();
+app.post(
+  "/api/gemini/extract-questions",
+  createRateLimiterMiddleware("ocr", 30),
+  async (req, res) => {
+    const { image, images, fileName, subjectHint } = req.body;
+    const currentClient = getGeminiClient();
 
-  // Simple clean helper to extract mime type and raw base64 data from standard dataURLs
-  const parseImageField = (base64String: string | undefined | null) => {
-    if (!base64String || typeof base64String !== "string") return null;
-    const match = base64String.match(/^data:([^;]+);base64,(.*)$/);
-    if (match) {
+    // Simple clean helper to extract mime type and raw base64 data from standard dataURLs
+    const parseImageField = (base64String: string | undefined | null) => {
+      if (!base64String || typeof base64String !== "string") return null;
+      const match = base64String.match(/^data:([^;]+);base64,(.*)$/);
+      if (match) {
+        return {
+          inlineData: {
+            mimeType: match[1],
+            data: match[2],
+          },
+        };
+      }
+      // Fallback if raw base64 without prefix is passed
       return {
         inlineData: {
-          mimeType: match[1],
-          data: match[2]
-        }
+          mimeType: "image/png",
+          data: base64String,
+        },
       };
-    }
-    // Fallback if raw base64 without prefix is passed
-    return {
-      inlineData: {
-        mimeType: "image/png",
-        data: base64String
-      }
     };
-  };
 
-  if (!currentClient) {
-    console.log("No Gemini API Key found for OCR, returning pristine mock extracted questions.");
-    // Return high-fidelity mock extraction based on the specified subject hint
-    const detectedSub = subjectHint || "Physics";
-    const yearMatches = fileName ? fileName.match(/\b(20\d\d)\b/) : null;
-    const detectedYear = yearMatches ? parseInt(yearMatches[1]) : 2024;
-
-    const mockQuestionsList: any[] = [];
-    if (detectedSub === "Mathematics") {
-      mockQuestionsList.push(
-        {
-          question_number: 1,
-          text: "If y = (2x^2 + 3)(x - 1), find dy/dx at the point x = 2.",
-          type: "mcq",
-          options: ["11", "15", "19", "23"],
-          correctAnswer: "2", // i.e. 19
-          explanation: "First expand the product or use the product rule: dy/dx = (4x)(x - 1) + (2x^2 + 3)(1). At x = 2: dy/dx = (8)(1) + (8 + 3)(1) = 8 + 11 = 19.",
-          hint: "Expand first or apply the Product Rule of differentiation.",
-          difficulty: "Medium",
-          topic: "Calculus",
-          confidence: 96
-        },
-        {
-          question_number: 2,
-          text: "Solve for x in the equation: log_10(3x + 1) - log_10(x - 2) = 1.",
-          type: "mcq",
-          options: ["x = 3", "x = 4", "x = 5", "x = 7"],
-          correctAnswer: "0", // i.e. x = 3
-          explanation: "Using logarithm laws: log((3x + 1)/(x - 2)) = 1 => (3x + 1)/(x - 2) = 10 => 3x + 1 = 10x - 20 => 7x = 21 => x = 3.",
-          hint: "Combine the logs into log_10(A/B) and reset logs to bases.",
-          difficulty: "Hard",
-          topic: "Algorithms & Logarithms",
-          confidence: 94
-        }
+    if (!currentClient) {
+      console.log(
+        "No Gemini API Key found for OCR, returning pristine mock extracted questions.",
       );
-    } else if (detectedSub === "Chemistry") {
-      mockQuestionsList.push(
-        {
-          question_number: 14,
-          text: "What volume of oxygen at s.t.p is required to burn completely 10 cm^3 of acetylene gas?",
-          type: "mcq",
-          options: ["10.0 cm^3", "20.0 cm^3", "25.0 cm^3", "50.0 cm^3"],
-          correctAnswer: "2", // i.e. 25.0 cm^3
-          explanation: "The equation for combustion of acetylene is: 2C2H2 + 5O2 -> 4CO2 + 2H2O. By volume ratios, 2 units of acetylene require 5 units of oxygen. Therefore, 10 cm^3 acetylene requires (5/2) * 10 = 25.0 cm^3.",
-          hint: "Write out the balanced stoichiometric combustion equation for C2H2.",
-          difficulty: "Hard",
-          topic: "Gas Laws & Stoichiometry",
-          confidence: 92
-        },
-        {
-          question_number: 15,
-          text: "Which of the following particles conducts electricity inside an electrolytic solution?",
-          type: "mcq",
-          options: ["Free Electrons", "Molecules", "Cations and Anions", "Neutrons"],
-          correctAnswer: "2", // i.e. Cations and Anions
-          explanation: "In electrolytic solutions or molten salts, electrical electric conductance is mediated strictly by the migration of mobile ions (cations to the cathode, anions to the anode).",
-          hint: "Think about the distinction between metallic conductors and electrolytic systems.",
-          difficulty: "Easy",
-          topic: "Electrolysis & Solutions",
-          confidence: 98
-        }
-      );
-    } else {
-      // Default / Physics
-      mockQuestionsList.push(
-        {
-          question_number: 8,
-          text: "An object is placed 15 cm in front of a concave mirror of focal length 10 cm. Calculate the image distance.",
-          type: "mcq",
-          options: ["15 cm", "30 cm", "45 cm", "60 cm"],
-          correctAnswer: "1", // i.e. 30 cm
-          explanation: "Using the mirror formula: 1/f = 1/u + 1/v. Given f = 10 and u = 15: 1/10 = 1/15 + 1/v => 1/v = 1/10 - 1/15 = 3/30 - 2/30 = 1/30. Thus, v = 30 cm.",
-          hint: "Apply the standard mirror formula 1/f = 1/u + 1/v.",
-          difficulty: "Medium",
-          topic: "Optics & Light Waves",
-          confidence: 97
-        },
-        {
-          question_number: 9,
-          text: "Whatistheunitofforce? (OCR typo fixed)",
-          type: "mcq",
-          options: ["Joule", "Newton", "Pascal", "Watt"],
-          correctAnswer: "1", // i.e. Newton
-          explanation: "The mechanical unit of force is the Newton (N). Correct spaces were parsed automatically by the AI study pipeline.",
-          hint: "Newton's second law formulation: F = ma.",
-          difficulty: "Easy",
-          topic: "Mechanics & Force",
-          confidence: 95
-        }
-      );
-    }
+      // Return high-fidelity mock extraction based on the specified subject hint
+      const detectedSub = subjectHint || "Physics";
+      const yearMatches = fileName ? fileName.match(/\b(20\d\d)\b/) : null;
+      const detectedYear = yearMatches ? parseInt(yearMatches[1]) : 2024;
 
-    return res.json({
-      isMock: true,
-      sheetConfidence: 95,
-      subject: detectedSub,
-      year: detectedYear,
-      questions: mockQuestionsList
-    });
-  }
+      const mockQuestionsList: any[] = [];
+      if (detectedSub === "Mathematics") {
+        mockQuestionsList.push(
+          {
+            question_number: 1,
+            text: "If y = (2x^2 + 3)(x - 1), find dy/dx at the point x = 2.",
+            type: "mcq",
+            options: ["11", "15", "19", "23"],
+            correctAnswer: "2", // i.e. 19
+            explanation:
+              "First expand the product or use the product rule: dy/dx = (4x)(x - 1) + (2x^2 + 3)(1). At x = 2: dy/dx = (8)(1) + (8 + 3)(1) = 8 + 11 = 19.",
+            hint: "Expand first or apply the Product Rule of differentiation.",
+            difficulty: "Medium",
+            topic: "Calculus",
+            confidence: 96,
+          },
+          {
+            question_number: 2,
+            text: "Solve for x in the equation: log_10(3x + 1) - log_10(x - 2) = 1.",
+            type: "mcq",
+            options: ["x = 3", "x = 4", "x = 5", "x = 7"],
+            correctAnswer: "0", // i.e. x = 3
+            explanation:
+              "Using logarithm laws: log((3x + 1)/(x - 2)) = 1 => (3x + 1)/(x - 2) = 10 => 3x + 1 = 10x - 20 => 7x = 21 => x = 3.",
+            hint: "Combine the logs into log_10(A/B) and reset logs to bases.",
+            difficulty: "Hard",
+            topic: "Algorithms & Logarithms",
+            confidence: 94,
+          },
+        );
+      } else if (detectedSub === "Chemistry") {
+        mockQuestionsList.push(
+          {
+            question_number: 14,
+            text: "What volume of oxygen at s.t.p is required to burn completely 10 cm^3 of acetylene gas?",
+            type: "mcq",
+            options: ["10.0 cm^3", "20.0 cm^3", "25.0 cm^3", "50.0 cm^3"],
+            correctAnswer: "2", // i.e. 25.0 cm^3
+            explanation:
+              "The equation for combustion of acetylene is: 2C2H2 + 5O2 -> 4CO2 + 2H2O. By volume ratios, 2 units of acetylene require 5 units of oxygen. Therefore, 10 cm^3 acetylene requires (5/2) * 10 = 25.0 cm^3.",
+            hint: "Write out the balanced stoichiometric combustion equation for C2H2.",
+            difficulty: "Hard",
+            topic: "Gas Laws & Stoichiometry",
+            confidence: 92,
+          },
+          {
+            question_number: 15,
+            text: "Which of the following particles conducts electricity inside an electrolytic solution?",
+            type: "mcq",
+            options: [
+              "Free Electrons",
+              "Molecules",
+              "Cations and Anions",
+              "Neutrons",
+            ],
+            correctAnswer: "2", // i.e. Cations and Anions
+            explanation:
+              "In electrolytic solutions or molten salts, electrical electric conductance is mediated strictly by the migration of mobile ions (cations to the cathode, anions to the anode).",
+            hint: "Think about the distinction between metallic conductors and electrolytic systems.",
+            difficulty: "Easy",
+            topic: "Electrolysis & Solutions",
+            confidence: 98,
+          },
+        );
+      } else {
+        // Default / Physics
+        mockQuestionsList.push(
+          {
+            question_number: 8,
+            text: "An object is placed 15 cm in front of a concave mirror of focal length 10 cm. Calculate the image distance.",
+            type: "mcq",
+            options: ["15 cm", "30 cm", "45 cm", "60 cm"],
+            correctAnswer: "1", // i.e. 30 cm
+            explanation:
+              "Using the mirror formula: 1/f = 1/u + 1/v. Given f = 10 and u = 15: 1/10 = 1/15 + 1/v => 1/v = 1/10 - 1/15 = 3/30 - 2/30 = 1/30. Thus, v = 30 cm.",
+            hint: "Apply the standard mirror formula 1/f = 1/u + 1/v.",
+            difficulty: "Medium",
+            topic: "Optics & Light Waves",
+            confidence: 97,
+          },
+          {
+            question_number: 9,
+            text: "Whatistheunitofforce? (OCR typo fixed)",
+            type: "mcq",
+            options: ["Joule", "Newton", "Pascal", "Watt"],
+            correctAnswer: "1", // i.e. Newton
+            explanation:
+              "The mechanical unit of force is the Newton (N). Correct spaces were parsed automatically by the AI study pipeline.",
+            hint: "Newton's second law formulation: F = ma.",
+            difficulty: "Easy",
+            topic: "Mechanics & Force",
+            confidence: 95,
+          },
+        );
+      }
 
-  try {
-    const userParts: any[] = [];
-    
-    // Support single image or multiple images array
-    if (images && Array.isArray(images)) {
-      images.forEach((imgBase64: string) => {
-        const parsed = parseImageField(imgBase64);
-        if (parsed) userParts.push(parsed);
+      return res.json({
+        isMock: true,
+        sheetConfidence: 95,
+        subject: detectedSub,
+        year: detectedYear,
+        questions: mockQuestionsList,
       });
-    } else if (image) {
-      const parsed = parseImageField(image);
-      if (parsed) userParts.push(parsed);
     }
 
-    if (userParts.length === 0) {
-      return res.status(400).json({ error: "No valid image or PDF payload provided for extraction." });
-    }
+    try {
+      const userParts: any[] = [];
 
-    const ocrInstructionPrompt = `You are a Senior AI OCR Engineer, Education Technology Specialist, and WAEC Exam Content Specialist.
+      // Support single image or multiple images array
+      if (images && Array.isArray(images)) {
+        images.forEach((imgBase64: string) => {
+          const parsed = parseImageField(imgBase64);
+          if (parsed) userParts.push(parsed);
+        });
+      } else if (image) {
+        const parsed = parseImageField(image);
+        if (parsed) userParts.push(parsed);
+      }
+
+      if (userParts.length === 0) {
+        return res.status(400).json({
+          error: "No valid image or PDF payload provided for extraction.",
+        });
+      }
+
+      const ocrInstructionPrompt = `You are a Senior AI OCR Engineer, Education Technology Specialist, and WAEC Exam Content Specialist.
 Read and analyze the attached high-resolution exam paper image / PDF document / scanned photo / past questions sheet.
 Conduct professional OCR and document extraction and item-segmentation to fulfill these objectives:
 
@@ -1742,77 +2192,106 @@ Return strictly parseable JSON conforming to this schema:
 
 Ensure the response contains only the valid parseable JSON. Do not write markdown wrappers like \`\`\`json unless requested by the platform, but returning the raw json directly is optimal.`;
 
-    userParts.push({ text: ocrInstructionPrompt });
+      userParts.push({ text: ocrInstructionPrompt });
 
-    const response = await currentClient.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: { parts: userParts },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            sheetConfidence: { type: Type.NUMBER },
-            subject: { type: Type.STRING },
-            year: { type: Type.NUMBER },
-            questions: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  question_number: { type: Type.NUMBER },
-                  text: { type: Type.STRING },
-                  type: { type: Type.STRING },
-                  options: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
+      const response = await currentClient.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: { parts: userParts },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              sheetConfidence: { type: Type.NUMBER },
+              subject: { type: Type.STRING },
+              year: { type: Type.NUMBER },
+              questions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    question_number: { type: Type.NUMBER },
+                    text: { type: Type.STRING },
+                    type: { type: Type.STRING },
+                    options: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                    },
+                    correctAnswer: { type: Type.STRING },
+                    explanation: { type: Type.STRING },
+                    hint: { type: Type.STRING },
+                    difficulty: { type: Type.STRING },
+                    topic: { type: Type.STRING },
+                    confidence: { type: Type.NUMBER },
                   },
-                  correctAnswer: { type: Type.STRING },
-                  explanation: { type: Type.STRING },
-                  hint: { type: Type.STRING },
-                  difficulty: { type: Type.STRING },
-                  topic: { type: Type.STRING },
-                  confidence: { type: Type.NUMBER }
+                  required: [
+                    "question_number",
+                    "text",
+                    "type",
+                    "options",
+                    "correctAnswer",
+                    "explanation",
+                    "hint",
+                    "difficulty",
+                    "topic",
+                    "confidence",
+                  ],
                 },
-                required: ["question_number", "text", "type", "options", "correctAnswer", "explanation", "hint", "difficulty", "topic", "confidence"]
-              }
-            }
+              },
+            },
+            required: ["sheetConfidence", "subject", "year", "questions"],
           },
-          required: ["sheetConfidence", "subject", "year", "questions"]
-        }
-      }
-    });
-
-    let cleanBody = "";
-    try {
-      const text = response.text || "";
-      cleanBody = text.trim();
-      const resultObj = JSON.parse(cleanBody);
-
-      return res.json({
-        sheetConfidence: resultObj.sheetConfidence || 90,
-        subject: resultObj.subject || "Physics",
-        year: resultObj.year || 2024,
-        questions: resultObj.questions || []
+        },
       });
-    } catch (parseError: any) {
-      console.error("Failed to parse Gemini OCR response:", parseError, "Response was:", response.text);
-      const logMsg = `[PARSE ERROR - ${new Date().toISOString()}] File: ${fileName || "unknown"}\nError: ${parseError.message}\nStack: ${parseError.stack}\nRaw Response: ${response.text}\n-----------------------\n`;
-      fs.appendFileSync(path.join(process.cwd(), "error_logs.txt"), logMsg, "utf8");
-      return res.status(500).json({
-        error: "Failed to parse structured JSON from AI OCR model. Please try a cleaner past paper scan.",
-        details: parseError.message,
-        rawResponse: response.text ? (response.text.substring(0, 300) + "...") : ""
+
+      let cleanBody = "";
+      try {
+        const text = response.text || "";
+        cleanBody = text.trim();
+        const resultObj = JSON.parse(cleanBody);
+
+        return res.json({
+          sheetConfidence: resultObj.sheetConfidence || 90,
+          subject: resultObj.subject || "Physics",
+          year: resultObj.year || 2024,
+          questions: resultObj.questions || [],
+        });
+      } catch (parseError: any) {
+        console.error(
+          "Failed to parse Gemini OCR response:",
+          parseError,
+          "Response was:",
+          response.text,
+        );
+        const logMsg = `[PARSE ERROR - ${new Date().toISOString()}] File: ${fileName || "unknown"}\nError: ${parseError.message}\nStack: ${parseError.stack}\nRaw Response: ${response.text}\n-----------------------\n`;
+        fs.appendFileSync(
+          path.join(process.cwd(), "error_logs.txt"),
+          logMsg,
+          "utf8",
+        );
+        return res.status(500).json({
+          error:
+            "Failed to parse structured JSON from AI OCR model. Please try a cleaner past paper scan.",
+          details: parseError.message,
+          rawResponse: response.text
+            ? response.text.substring(0, 300) + "..."
+            : "",
+        });
+      }
+    } catch (err: any) {
+      console.error("Gemini OCR Question Extraction failed:", err);
+      const logMsg = `[API ERROR - ${new Date().toISOString()}] File: ${fileName || "unknown"}\nSubject Hint: ${subjectHint || "unknown"}\nError: ${err.message}\nStack: ${err.stack}\n-----------------------\n`;
+      fs.appendFileSync(
+        path.join(process.cwd(), "error_logs.txt"),
+        logMsg,
+        "utf8",
+      );
+      res.status(500).json({
+        error: "Failed to parse questions using AI OCR: " + err.message,
       });
     }
-
-  } catch (err: any) {
-    console.error("Gemini OCR Question Extraction failed:", err);
-    const logMsg = `[API ERROR - ${new Date().toISOString()}] File: ${fileName || "unknown"}\nSubject Hint: ${subjectHint || "unknown"}\nError: ${err.message}\nStack: ${err.stack}\n-----------------------\n`;
-    fs.appendFileSync(path.join(process.cwd(), "error_logs.txt"), logMsg, "utf8");
-    res.status(500).json({ error: "Failed to parse questions using AI OCR: " + err.message });
-  }
-});
+  },
+);
 
 // MULTIPLAYER MATCHMAKING SIMULATION IN-MEMORY STORES
 interface MatchmakingQueue {
@@ -1831,7 +2310,9 @@ app.post("/api/battles/queue", (req, res) => {
   if (!username) return res.status(400).json({ error: "Missing username" });
 
   // Check if someone of the same subject is waiting
-  const matchIndex = matchmakingQueue.findIndex(p => p.subject === subject && p.username !== username);
+  const matchIndex = matchmakingQueue.findIndex(
+    (p) => p.subject === subject && p.username !== username,
+  );
 
   if (matchIndex !== -1) {
     // Match found! Create Battle Room
@@ -1847,7 +2328,7 @@ app.post("/api/battles/queue", (req, res) => {
         score: 0,
         currentQuestionIndex: 0,
         answers: [],
-        lastReaction: ""
+        lastReaction: "",
       },
       player2: {
         username: username,
@@ -1855,19 +2336,31 @@ app.post("/api/battles/queue", (req, res) => {
         score: 0,
         currentQuestionIndex: 0,
         answers: [],
-        lastReaction: ""
+        lastReaction: "",
       },
       subject,
-      status: 'battle',
+      status: "battle",
       timerSeconds: 60,
-      maxQuestions: 5
+      maxQuestions: 5,
     };
 
     activeBattles[roomId] = newRoom;
 
     // Send response to match partner and ourselves
-    opponent.res.json({ status: "matched", room: newRoom, opponent: { username, avatar, level } });
-    res.json({ status: "matched", room: newRoom, opponent: { username: opponent.username, avatar: opponent.avatar, level: opponent.level } });
+    opponent.res.json({
+      status: "matched",
+      room: newRoom,
+      opponent: { username, avatar, level },
+    });
+    res.json({
+      status: "matched",
+      room: newRoom,
+      opponent: {
+        username: opponent.username,
+        avatar: opponent.avatar,
+        level: opponent.level,
+      },
+    });
   } else {
     // No match. Add to queue. Let's add a timeout which matches against a Smart bot if no human joins within 5 seconds for absolute playability!
     const queueItem = { username, avatar, level, subject, res };
@@ -1875,16 +2368,27 @@ app.post("/api/battles/queue", (req, res) => {
 
     // After 4.5 seconds, if the request is still pending (status code hasn't been sent yet), automatically pair with an AI CBT Bot
     setTimeout(() => {
-      const activeQueueIndex = matchmakingQueue.findIndex(q => q.username === username && q.subject === subject);
+      const activeQueueIndex = matchmakingQueue.findIndex(
+        (q) => q.username === username && q.subject === subject,
+      );
       if (activeQueueIndex !== -1) {
         // Discard from queue
         matchmakingQueue.splice(activeQueueIndex, 1);
 
         const roomId = `room-bot-${Date.now()}`;
-        const botNames = ["Adegoke_UI", "Chioma_Owerri", "Femi_CBT_King", "Ezenwa_1", "Fatou_Gambia", "Kweku_Ghana"];
-        const selectedBot = botNames[Math.floor(Math.random() * botNames.length)];
+        const botNames = [
+          "Adegoke_UI",
+          "Chioma_Owerri",
+          "Femi_CBT_King",
+          "Ezenwa_1",
+          "Fatou_Gambia",
+          "Kweku_Ghana",
+        ];
+        const selectedBot =
+          botNames[Math.floor(Math.random() * botNames.length)];
         const botAvatars = ["🦁", "⚡", "👤", "⭐", "💎", "🛡️"];
-        const selectedBotAvatar = botAvatars[Math.floor(Math.random() * botAvatars.length)];
+        const selectedBotAvatar =
+          botAvatars[Math.floor(Math.random() * botAvatars.length)];
 
         const newRoom = {
           roomId,
@@ -1894,7 +2398,7 @@ app.post("/api/battles/queue", (req, res) => {
             score: 0,
             currentQuestionIndex: 0,
             answers: [],
-            lastReaction: ""
+            lastReaction: "",
           },
           player2: {
             username: selectedBot,
@@ -1902,17 +2406,26 @@ app.post("/api/battles/queue", (req, res) => {
             score: 0,
             currentQuestionIndex: 0,
             answers: [],
-            lastReaction: "👋 Hello!"
+            lastReaction: "👋 Hello!",
           },
           subject,
-          status: 'battle',
+          status: "battle",
           timerSeconds: 60,
           maxQuestions: 5,
-          isBot: true
+          isBot: true,
         };
 
         activeBattles[roomId] = newRoom;
-        res.json({ status: "matched", room: newRoom, opponent: { username: selectedBot, avatar: selectedBotAvatar, level: Math.max(1, level + Math.floor(Math.random() * 3) - 1) }, isBot: true });
+        res.json({
+          status: "matched",
+          room: newRoom,
+          opponent: {
+            username: selectedBot,
+            avatar: selectedBotAvatar,
+            level: Math.max(1, level + Math.floor(Math.random() * 3) - 1),
+          },
+          isBot: true,
+        });
       }
     }, 4500);
   }
@@ -1948,15 +2461,26 @@ app.post("/api/battles/update", (req, res) => {
       if (botScored) {
         room.player2.score += 20;
       }
-      const botReactions = ["🔥 Nice shot!", "😮 Wow!", "🚀 Climbing!", "😅 Phew!", "👍 Great!"];
+      const botReactions = [
+        "🔥 Nice shot!",
+        "😮 Wow!",
+        "🚀 Climbing!",
+        "😅 Phew!",
+        "👍 Great!",
+      ];
       if (Math.random() > 0.6) {
-        room.player2.lastReaction = botReactions[Math.floor(Math.random() * botReactions.length)];
+        room.player2.lastReaction =
+          botReactions[Math.floor(Math.random() * botReactions.length)];
       }
     }
   }
 
-  if (room.player1.currentQuestionIndex >= 5 && room.player2 && room.player2.currentQuestionIndex >= 5) {
-    room.status = 'finished';
+  if (
+    room.player1.currentQuestionIndex >= 5 &&
+    room.player2 &&
+    room.player2.currentQuestionIndex >= 5
+  ) {
+    room.status = "finished";
     if (room.player1.score > room.player2.score) {
       room.winner = room.player1.username;
     } else if (room.player2.score > room.player1.score) {
@@ -2004,10 +2528,10 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 

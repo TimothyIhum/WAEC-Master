@@ -1,6 +1,6 @@
 export interface AiChatMessage {
   id: string;
-  role: 'user' | 'model';
+  role: "user" | "model";
   text: string;
   timestamp: string;
   isMock?: boolean;
@@ -36,7 +36,7 @@ export interface UserProgress {
   savedAiSessions?: AiChatSession[];
 }
 
-export type QuestionType = 'mcq' | 'theory' | 'fill_in_the_blank';
+export type QuestionType = "mcq" | "theory" | "fill_in_the_blank";
 
 export interface Question {
   id: string;
@@ -48,12 +48,15 @@ export interface Question {
   correctAnswer: string; // Index for MCQ (e.g., "0", "1", "2", "3"), or raw content for theory/blank
   explanation: string;
   hint?: string;
-  difficulty: 'Easy' | 'Medium' | 'Hard';
+  difficulty: "Easy" | "Medium" | "Hard";
   marks: number;
   diagramUrl?: string; // Optional illustration base64 or URL
-  examName?: 'WAEC' | 'JAMB';
+  examName?: "WAEC" | "JAMB";
   examYear?: number;
   questionNumber?: number;
+  paperId?: string;
+  paperTitle?: string;
+  sourceFileName?: string;
 }
 
 export interface LeaderboardEntry {
@@ -81,7 +84,7 @@ export interface BattleRoom {
   player1: BattlePlayer;
   player2: BattlePlayer | null; // Null during matchmaking queuing
   questions: Question[];
-  status: 'queue' | 'battle' | 'finished';
+  status: "queue" | "battle" | "finished";
   timerSeconds: number;
   maxQuestions: number;
   winner?: string;
@@ -112,7 +115,7 @@ export interface Announcement {
   title: string;
   content: string;
   timestamp: string;
-  category: 'Exam Update' | 'Reward' | 'Tournament';
+  category: "Exam Update" | "Reward" | "Tournament";
 }
 
 export interface DailyMission {
@@ -121,7 +124,8 @@ export interface DailyMission {
   target: number;
   current: number;
   xpReward: number;
-  type: 'answer_questions' | 'score_percentage' | 'streak_maintain' | 'win_battle';
+  type:
+    "answer_questions" | "score_percentage" | "streak_maintain" | "win_battle";
 }
 
 export interface ParentCheckpoint {

@@ -51,8 +51,8 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE discussion_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE discussion_replies ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY select_user_profile ON users 
-    FOR SELECT 
+CREATE POLICY select_user_profile ON users
+    FOR SELECT
     USING (true);
 
 CREATE POLICY insert_own_profile ON users
@@ -69,7 +69,7 @@ CREATE POLICY update_own_profile ON users
         (current_setting('app.current_user_id', true) = id)
     )
     WITH CHECK (
-        (CASE 
+        (CASE
             WHEN (current_setting('request.jwt.claims', true)::jsonb->>'email' IN ('temiokusami@gmail.com', 'timothyihum@gmail.com', 'admin@waecmaster.edu.ng')) THEN TRUE
             ELSE (is_admin = FALSE AND is_premium = users.is_premium)
          END)
@@ -125,8 +125,15 @@ CREATE TABLE IF NOT EXISTS questions (
     exam_name VARCHAR(50) DEFAULT NULL CHECK (exam_name IN ('WAEC', 'JAMB')),
     exam_year INTEGER DEFAULT NULL,
     question_number INTEGER DEFAULT NULL,
+    paper_id VARCHAR(180) DEFAULT NULL,
+    paper_title VARCHAR(255) DEFAULT NULL,
+    source_file_name TEXT DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_questions_subject_exam_year_number
+    ON questions(subject, exam_name, exam_year DESC, question_number ASC);
+CREATE INDEX IF NOT EXISTS idx_questions_paper_id ON questions(paper_id);
 
 ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
 
@@ -141,4 +148,3 @@ CREATE POLICY insert_admin_questions ON questions
         (current_setting('app.current_user_email', true) IN ('temiokusami@gmail.com', 'timothyihum@gmail.com', 'admin@waecmaster.edu.ng')) OR
         true -- Allow synchronization from applet connections
     );
-
