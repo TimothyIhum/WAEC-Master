@@ -17,6 +17,7 @@ import {
   Download,
   PanelLeftClose,
   PanelLeftOpen,
+  ChevronDown,
 } from "lucide-react";
 
 // Subcomponents
@@ -88,6 +89,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showUserDashboard, setShowUserDashboard] = useState(false);
+  const [desktopSidebarViewMenuOpen, setDesktopSidebarViewMenuOpen] =
+    useState(false);
   const [desktopSidebarMode, setDesktopSidebarMode] = useState<
     "full" | "compact" | "hidden"
   >(() => {
@@ -919,50 +922,66 @@ export default function App() {
             {/* VIBRANT PALETTE DYNAMIC TOP HEADER */}
             <header className="hidden lg:flex h-20 px-8 items-center justify-between bg-white border-b border-slate-200 shrink-0 sticky top-0 z-30">
               <div className="flex gap-4 items-center">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDesktopSidebarMode((prev) =>
-                      prev === "hidden" ? "full" : "hidden",
-                    )
-                  }
-                  className="flex items-center gap-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 active:scale-95 text-slate-700 font-bold px-4 py-1.5 rounded-full select-none shadow-3xs cursor-pointer text-xs"
-                  title={
-                    isDesktopSidebarHidden ? "Show sidebar" : "Hide sidebar"
-                  }
-                >
-                  {isDesktopSidebarHidden ? (
-                    <PanelLeftOpen className="w-4 h-4 text-indigo-600" />
-                  ) : (
-                    <PanelLeftClose className="w-4 h-4 text-indigo-600" />
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDesktopSidebarViewMenuOpen((prev) => !prev)
+                    }
+                    className="flex items-center gap-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 active:scale-95 text-slate-700 font-bold px-4 py-1.5 rounded-full select-none shadow-3xs cursor-pointer text-xs"
+                    title="Sidebar view options"
+                  >
+                    {isDesktopSidebarHidden ? (
+                      <PanelLeftOpen className="w-4 h-4 text-indigo-600" />
+                    ) : isDesktopSidebarCompact ? (
+                      <PanelLeftClose className="w-4 h-4 text-indigo-600" />
+                    ) : (
+                      <PanelLeftOpen className="w-4 h-4 text-indigo-600" />
+                    )}
+                    <span>Sidebar View</span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-slate-500 transition-transform ${desktopSidebarViewMenuOpen ? "rotate-180" : "rotate-0"}`}
+                    />
+                  </button>
+
+                  {desktopSidebarViewMenuOpen && (
+                    <div className="absolute left-0 top-12 z-40 min-w-48 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDesktopSidebarMode("full");
+                          setDesktopSidebarViewMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold transition ${desktopSidebarMode === "full" ? "bg-indigo-50 text-indigo-700" : "text-slate-700 hover:bg-slate-50"}`}
+                      >
+                        <PanelLeftOpen className="w-4 h-4" />
+                        <span>Full Sidebar</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDesktopSidebarMode("compact");
+                          setDesktopSidebarViewMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold transition ${desktopSidebarMode === "compact" ? "bg-indigo-50 text-indigo-700" : "text-slate-700 hover:bg-slate-50"}`}
+                      >
+                        <PanelLeftClose className="w-4 h-4" />
+                        <span>Compact Sidebar</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDesktopSidebarMode("hidden");
+                          setDesktopSidebarViewMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold transition ${desktopSidebarMode === "hidden" ? "bg-indigo-50 text-indigo-700" : "text-slate-700 hover:bg-slate-50"}`}
+                      >
+                        <PanelLeftClose className="w-4 h-4" />
+                        <span>Focus Mode</span>
+                      </button>
+                    </div>
                   )}
-                  <span>
-                    {isDesktopSidebarHidden ? "Show Menu" : "Focus Mode"}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDesktopSidebarMode((prev) =>
-                      prev === "compact" ? "full" : "compact",
-                    )
-                  }
-                  className="flex items-center gap-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 active:scale-95 text-slate-700 font-bold px-4 py-1.5 rounded-full select-none shadow-3xs cursor-pointer text-xs"
-                  title={
-                    isDesktopSidebarCompact
-                      ? "Expand sidebar"
-                      : "Compact sidebar"
-                  }
-                >
-                  {isDesktopSidebarCompact ? (
-                    <PanelLeftOpen className="w-4 h-4 text-indigo-600" />
-                  ) : (
-                    <PanelLeftClose className="w-4 h-4 text-indigo-600" />
-                  )}
-                  <span>
-                    {isDesktopSidebarCompact ? "Expand Menu" : "Compact Menu"}
-                  </span>
-                </button>
+                </div>
                 <button
                   onClick={toggleLanguage}
                   className="flex items-center gap-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 active:scale-95 text-slate-700 font-bold px-4 py-1.5 rounded-full select-none shadow-3xs cursor-pointer text-xs"
