@@ -52,23 +52,26 @@ import {
 } from "./utils/firebaseSync";
 
 export default function App() {
-  const getEffectiveStreak = React.useCallback((progress: Partial<UserProgress> | null | undefined) => {
-    if (!progress) return 0;
-    const rawStreak = Number(progress.streak ?? 0);
-    const lastActiveDate = progress.lastActiveDate;
-    if (!lastActiveDate) return 0;
+  const getEffectiveStreak = React.useCallback(
+    (progress: Partial<UserProgress> | null | undefined) => {
+      if (!progress) return 0;
+      const rawStreak = Number(progress.streak ?? 0);
+      const lastActiveDate = progress.lastActiveDate;
+      if (!lastActiveDate) return 0;
 
-    const todayStr = new Date().toLocaleDateString("en-CA");
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toLocaleDateString("en-CA");
+      const todayStr = new Date().toLocaleDateString("en-CA");
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toLocaleDateString("en-CA");
 
-    if (lastActiveDate === todayStr || lastActiveDate === yesterdayStr) {
-      return rawStreak;
-    }
+      if (lastActiveDate === todayStr || lastActiveDate === yesterdayStr) {
+        return rawStreak;
+      }
 
-    return 0;
-  }, []);
+      return 0;
+    },
+    [],
+  );
 
   const [user, setUser] = useState<UserProgress | null>(() => {
     const saved = localStorage.getItem("waec_user_session");
@@ -312,9 +315,16 @@ export default function App() {
   }, [user, getEffectiveStreak]);
 
   // Downloaded Offline Subjects List
-  const [downloadedSubjects, setDownloadedSubjects] = useState<string[]>([
-    "Mathematics",
-  ]);
+  const [downloadedSubjects, setDownloadedSubjects] = useState<string[]>(() => {
+    const saved = localStorage.getItem("waec_downloaded_subjects");
+    if (!saved) return [];
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
 
   // Active question context for AI solving explanation
   const [activeQuestionForTutor, setActiveQuestionForTutor] =
@@ -584,7 +594,14 @@ export default function App() {
 
   const handleDownloadSubject = (subj: string) => {
     if (!downloadedSubjects.includes(subj)) {
-      setDownloadedSubjects((px) => [...px, subj]);
+      setDownloadedSubjects((px) => {
+        const updated = [...px, subj];
+        localStorage.setItem(
+          "waec_downloaded_subjects",
+          JSON.stringify(updated),
+        );
+        return updated;
+      });
     }
   };
 

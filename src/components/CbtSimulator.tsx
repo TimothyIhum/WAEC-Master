@@ -107,6 +107,14 @@ export default function CbtSimulator({
   // Start Exam
   const handleStartExam = () => {
     setNoQuestionsMessage("");
+
+    const isDownloaded = downloadedSubjects.includes(selectedSubject);
+    if (!isDownloaded) {
+      setNoQuestionsMessage(
+        `${selectedSubject} is not saved for offline use yet. Click "Save Offline" first.`,
+      );
+      return;
+    }
     let examType: "WAEC" | "JAMB" =
       selectedMode === "jamb_practice" ? "JAMB" : "WAEC";
 
@@ -255,13 +263,13 @@ export default function CbtSimulator({
     setPhase("select");
   };
 
-  // Simulate downloading questions for offline use
+  // Save subject for offline use in local device storage
   const simulateDownload = (subj: string) => {
     setDownloading(subj);
     setTimeout(() => {
       onDownloadSubject(subj);
       setDownloading(null);
-    }, 1500);
+    }, 800);
   };
 
   const getPercentageString = () => {
