@@ -52,6 +52,24 @@ import {
 } from "./utils/firebaseSync";
 
 export default function App() {
+  const getEffectiveStreak = React.useCallback((progress: Partial<UserProgress> | null | undefined) => {
+    if (!progress) return 0;
+    const rawStreak = Number(progress.streak ?? 0);
+    const lastActiveDate = progress.lastActiveDate;
+    if (!lastActiveDate) return 0;
+
+    const todayStr = new Date().toLocaleDateString("en-CA");
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toLocaleDateString("en-CA");
+
+    if (lastActiveDate === todayStr || lastActiveDate === yesterdayStr) {
+      return rawStreak;
+    }
+
+    return 0;
+  }, []);
+
   const [user, setUser] = useState<UserProgress | null>(() => {
     const saved = localStorage.getItem("waec_user_session");
     if (saved) {
@@ -60,7 +78,10 @@ export default function App() {
         if (parsed && parsed.email) {
           // No client-side hardcoded admin promotion.
         }
-        return parsed;
+        return {
+          ...parsed,
+          streak: parsed?.lastActiveDate ? Number(parsed.streak ?? 0) : 0,
+        };
       } catch (e) {
         console.error("Failed to parse active user session:", e);
       }
@@ -210,10 +231,14 @@ export default function App() {
               const liveUser = await profileResp.json();
               if (liveUser && liveUser.email) {
                 // No client-side hardcoded admin promotion.
-                setUser(liveUser);
+                const hydratedUser = {
+                  ...liveUser,
+                  streak: getEffectiveStreak(liveUser),
+                };
+                setUser(hydratedUser);
                 localStorage.setItem(
                   "waec_user_session",
-                  JSON.stringify(liveUser),
+                  JSON.stringify(hydratedUser),
                 );
               }
             } else if (profileResp.status === 404) {
@@ -263,7 +288,8 @@ export default function App() {
               xp: user.xp,
               level: user.level,
               rankTier: user.rankTier,
-              streak: user.streak,
+              streak: getEffectiveStreak(user),
+              lastActiveDate: user.lastActiveDate,
               accuracy: user.accuracy,
               totalQuizzes: user.totalQuizzes,
               timeSpentMinutes: user.timeSpentMinutes,
@@ -283,7 +309,7 @@ export default function App() {
     } else {
       localStorage.removeItem("waec_user_session");
     }
-  }, [user]);
+  }, [user, getEffectiveStreak]);
 
   // Downloaded Offline Subjects List
   const [downloadedSubjects, setDownloadedSubjects] = useState<string[]>([
@@ -348,7 +374,7 @@ export default function App() {
         xp: Number(fullProfile.xp ?? 100),
         level: Number(fullProfile.level ?? 1),
         rankTier: fullProfile.rankTier || "Bronze Scholar",
-        streak: Number(fullProfile.streak ?? 0),
+        streak: getEffectiveStreak(fullProfile),
         lastActiveDate: fullProfile.lastActiveDate,
         accuracy: Number(fullProfile.accuracy ?? 100),
         timeSpentMinutes: Number(fullProfile.timeSpentMinutes ?? 0),
@@ -403,7 +429,7 @@ export default function App() {
         xp: dbUser.xp ?? 100,
         level: dbUser.level ?? 1,
         rankTier: dbUser.rankTier ?? "Bronze Scholar",
-        streak: dbUser.streak ?? 0,
+        streak: getEffectiveStreak(dbUser),
         lastActiveDate: dbUser.lastActiveDate,
         accuracy: dbUser.accuracy ?? 100,
         timeSpentMinutes: dbUser.timeSpentMinutes ?? 0,
@@ -980,8 +1006,9 @@ export default function App() {
                 </button>
                 {(() => {
                   const todayStr = new Date().toLocaleDateString("en-CA");
+                  const effectiveStreak = getEffectiveStreak(user);
                   const hasPracticedToday = user.lastActiveDate === todayStr;
-                  const isAtRisk = !hasPracticedToday && user.streak > 0;
+                  const isAtRisk = !hasPracticedToday && effectiveStreak > 0;
 
                   return (
                     <div
@@ -1002,7 +1029,7 @@ export default function App() {
                       <span
                         className={`font-bold text-xs ${hasPracticedToday ? "text-rose-600" : isAtRisk ? "text-amber-700" : "text-slate-600"}`}
                       >
-                        {user.streak} Day Streak
+                        {getEffectiveStreak(user)} Day Streak
                       </span>
                       {!hasPracticedToday && (
                         <AlertTriangle

@@ -790,7 +790,8 @@ app.post("/api/auth/login", async (req, res) => {
           level: Number(dbUser.level ?? 1),
           xp: Number(dbUser.xp ?? 0),
           rankTier: dbUser.rankTier || "Bronze Scholar",
-          streak: Number(dbUser.streak ?? 1),
+          streak: Number(dbUser.streak ?? 0),
+          lastActiveDate: dbUser.lastActiveDate || undefined,
           accuracy: Number(dbUser.accuracy ?? 100),
           totalQuizzes: Number(dbUser.totalQuizzes ?? 0),
           timeSpentMinutes: Number(dbUser.timeSpentMinutes ?? 0),
@@ -840,7 +841,8 @@ app.post("/api/auth/login", async (req, res) => {
           level: Number(fUser.level ?? 1),
           xp: Number(fUser.xp ?? 0),
           rankTier: fUser.rankTier || "Bronze Scholar",
-          streak: Number(fUser.streak ?? 1),
+          streak: Number(fUser.streak ?? 0),
+          lastActiveDate: fUser.lastActiveDate || undefined,
           accuracy: Number(fUser.accuracy ?? 100),
           totalQuizzes: Number(fUser.totalQuizzes ?? 0),
           timeSpentMinutes: Number(fUser.timeSpentMinutes ?? 0),
@@ -1192,7 +1194,8 @@ app.get("/api/users/profile", async (req, res) => {
         level: Number(dbUser.level ?? 1),
         xp: Number(dbUser.xp ?? 0),
         rankTier: dbUser.rankTier || "Bronze Scholar",
-        streak: Number(dbUser.streak ?? 1),
+        streak: Number(dbUser.streak ?? 0),
+        lastActiveDate: dbUser.lastActiveDate || undefined,
         accuracy: Number(dbUser.accuracy ?? 100),
         totalQuizzes: Number(dbUser.totalQuizzes ?? 0),
         timeSpentMinutes: Number(dbUser.timeSpentMinutes ?? 0),
@@ -1235,7 +1238,8 @@ app.get("/api/users/profile", async (req, res) => {
       level: Number(fUser.level ?? 1),
       xp: Number(fUser.xp ?? 0),
       rankTier: fUser.rankTier || "Bronze Scholar",
-      streak: Number(fUser.streak ?? 1),
+      streak: Number(fUser.streak ?? 0),
+      lastActiveDate: fUser.lastActiveDate || undefined,
       accuracy: Number(fUser.accuracy ?? 100),
       totalQuizzes: Number(fUser.totalQuizzes ?? 0),
       timeSpentMinutes: Number(fUser.timeSpentMinutes ?? 0),
@@ -1255,7 +1259,7 @@ app.get("/api/users", async (req, res) => {
   if (pool) {
     try {
       const result = await pool.query(`
-        SELECT id, username, email, password_hash as "password", avatar, xp, level, rank_tier as "rankTier", streak, accuracy, total_quizzes as "totalQuizzes", time_spent_minutes as "timeSpentMinutes", subjects_studied as "subjectsStudied", is_premium as "isPremium", is_admin as "isAdmin", created_at, updated_at
+        SELECT id, username, email, password_hash as "password", avatar, xp, level, rank_tier as "rankTier", streak, last_active_date as "lastActiveDate", accuracy, total_quizzes as "totalQuizzes", time_spent_minutes as "timeSpentMinutes", subjects_studied as "subjectsStudied", is_premium as "isPremium", is_admin as "isAdmin", created_at, updated_at
         FROM users
       `);
       return res.json(result.rows);
@@ -1297,8 +1301,8 @@ app.post("/api/users/sync", async (req, res) => {
       await pool.query(
         `
         INSERT INTO users (
-          id, username, email, password_hash, avatar, xp, level, rank_tier, streak, accuracy, total_quizzes, time_spent_minutes, subjects_studied, is_premium, is_admin, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
+          id, username, email, password_hash, avatar, xp, level, rank_tier, streak, last_active_date, accuracy, total_quizzes, time_spent_minutes, subjects_studied, is_premium, is_admin, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, CURRENT_TIMESTAMP)
         ON CONFLICT (email) DO UPDATE SET
           username = EXCLUDED.username,
           password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
@@ -1307,6 +1311,7 @@ app.post("/api/users/sync", async (req, res) => {
           level = EXCLUDED.level,
           rank_tier = EXCLUDED.rank_tier,
           streak = EXCLUDED.streak,
+          last_active_date = EXCLUDED.last_active_date,
           accuracy = EXCLUDED.accuracy,
           total_quizzes = EXCLUDED.total_quizzes,
           time_spent_minutes = EXCLUDED.time_spent_minutes,
@@ -1324,7 +1329,8 @@ app.post("/api/users/sync", async (req, res) => {
           Number(user.xp ?? 0),
           Number(user.level ?? 1),
           user.rankTier || "Bronze Scholar",
-          Number(user.streak ?? 1),
+          Number(user.streak ?? 0),
+          user.lastActiveDate || null,
           Number(user.accuracy ?? 100),
           Number(user.totalQuizzes ?? 0),
           Number(user.timeSpentMinutes ?? 0),
@@ -1351,7 +1357,8 @@ app.post("/api/users/sync", async (req, res) => {
       xp: Number(user.xp ?? 0),
       level: Number(user.level ?? 1),
       rankTier: user.rankTier || "Bronze Scholar",
-      streak: Number(user.streak ?? 1),
+      streak: Number(user.streak ?? 0),
+      lastActiveDate: user.lastActiveDate || undefined,
       accuracy: Number(user.accuracy ?? 100),
       totalQuizzes: Number(user.totalQuizzes ?? 0),
       timeSpentMinutes: Number(user.timeSpentMinutes ?? 0),
