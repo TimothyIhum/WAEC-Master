@@ -314,18 +314,6 @@ export default function App() {
     }
   }, [user, getEffectiveStreak]);
 
-  // Downloaded Offline Subjects List
-  const [downloadedSubjects, setDownloadedSubjects] = useState<string[]>(() => {
-    const saved = localStorage.getItem("waec_downloaded_subjects");
-    if (!saved) return [];
-    try {
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
-
   // Active question context for AI solving explanation
   const [activeQuestionForTutor, setActiveQuestionForTutor] =
     useState<Question | null>(null);
@@ -590,19 +578,6 @@ export default function App() {
         school: "FGC Lagos College",
       }),
     }).catch((e) => console.error("Failing to sync leaderboard endpoints:", e));
-  };
-
-  const handleDownloadSubject = (subj: string) => {
-    if (!downloadedSubjects.includes(subj)) {
-      setDownloadedSubjects((px) => {
-        const updated = [...px, subj];
-        localStorage.setItem(
-          "waec_downloaded_subjects",
-          JSON.stringify(updated),
-        );
-        return updated;
-      });
-    }
   };
 
   const handleAskTutorBridge = (q: Question) => {
@@ -1112,8 +1087,6 @@ export default function App() {
                       userLevel={user.level}
                       onQuizCompleted={handleQuizCompleted}
                       onAskAiTutor={handleAskTutorBridge}
-                      downloadedSubjects={downloadedSubjects}
-                      onDownloadSubject={handleDownloadSubject}
                       subjectsList={subjectsList}
                       questionsList={questionsList}
                     />

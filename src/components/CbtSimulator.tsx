@@ -33,8 +33,6 @@ interface CbtSimulatorProps {
     timeSpentMin: number,
   ) => void;
   onAskAiTutor: (question: Question) => void;
-  downloadedSubjects: string[];
-  onDownloadSubject: (subject: string) => void;
   subjectsList?: string[];
   questionsList?: Question[];
 }
@@ -51,8 +49,6 @@ export default function CbtSimulator({
   userLevel,
   onQuizCompleted,
   onAskAiTutor,
-  downloadedSubjects,
-  onDownloadSubject,
   subjectsList = SUBJECTS_LIST,
   questionsList = [],
 }: CbtSimulatorProps) {
@@ -77,7 +73,6 @@ export default function CbtSimulator({
   const [initialTime, setInitialTime] = useState(600);
   const [lives, setLives] = useState(3); // For survival mode
   const [showHint, setShowHint] = useState<boolean>(false);
-  const [downloading, setDownloading] = useState<string | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState<boolean>(false);
   const [noQuestionsMessage, setNoQuestionsMessage] = useState<string>("");
 
@@ -108,13 +103,6 @@ export default function CbtSimulator({
   const handleStartExam = () => {
     setNoQuestionsMessage("");
 
-    const isDownloaded = downloadedSubjects.includes(selectedSubject);
-    if (!isDownloaded) {
-      setNoQuestionsMessage(
-        `${selectedSubject} is not saved for offline use yet. Click "Save Offline" first.`,
-      );
-      return;
-    }
     let examType: "WAEC" | "JAMB" =
       selectedMode === "jamb_practice" ? "JAMB" : "WAEC";
 
@@ -263,15 +251,6 @@ export default function CbtSimulator({
     setPhase("select");
   };
 
-  // Save subject for offline use in local device storage
-  const simulateDownload = (subj: string) => {
-    setDownloading(subj);
-    setTimeout(() => {
-      onDownloadSubject(subj);
-      setDownloading(null);
-    }, 800);
-  };
-
   const getPercentageString = () => {
     if (questions.length === 0) return "0%";
     return Math.round((correctCount / questions.length) * 100) + "%";
@@ -322,7 +301,6 @@ export default function CbtSimulator({
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 {subjectsList.map((subj) => {
-                  const isDownloaded = downloadedSubjects.includes(subj);
                   return (
                     <div
                       key={subj}
@@ -333,31 +311,8 @@ export default function CbtSimulator({
                         {subj}
                       </span>
 
-                      <div className="flex justify-between items-center mt-2">
-                        {isDownloaded ? (
-                          <span
-                            className={`text-[9px] font-bold py-0.5 px-2 rounded-full ${selectedSubject === subj ? "bg-indigo-500/50 text-white" : "bg-emerald-100 text-emerald-800"}`}
-                          >
-                            Offline OK
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              simulateDownload(subj);
-                            }}
-                            disabled={downloading !== null}
-                            className={`text-[9px] font-black uppercase tracking-wider p-1 rounded-md flex items-center gap-0.5 pointer-events-auto ${selectedSubject === subj ? "text-indigo-200 hover:text-white" : "text-slate-400 hover:text-indigo-600"}`}
-                          >
-                            {downloading === subj ? (
-                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                            ) : (
-                              <Download className="w-2.5 h-2.5" />
-                            )}
-                            Save Offline
-                          </button>
-                        )}
+                      <div className="mt-2 text-[9px] font-black uppercase tracking-wider text-slate-400">
+                        Select subject
                       </div>
                     </div>
                   );
