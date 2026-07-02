@@ -326,14 +326,13 @@ export default function App() {
 
   // Parent configuration
   const [parentConfig, setParentConfig] = useState<ParentCheckpoint>({
-    parentPin: "1234",
-    parentEmail: "parent@waecmaster.edu.ng",
+    parentPin: "",
+    parentEmail: "",
     dailyGoalMinutes: 45,
-    rewardOffer: "Cold Golden Stone Ice Cream if accuracy exceeds 80%!",
+    rewardOffer: "",
     activityAllowedHourStart: 6,
     activityAllowedHourEnd: 22,
-    parentNotes:
-      "Keep up the focus, we are so proud of your diligence! Focus on physics mechanics formulas.",
+    parentNotes: "",
   });
 
   // Handle successful login
