@@ -237,27 +237,6 @@ export default function AdminPanel({
     }
   };
 
-  const approvePaymentRequest = async (requestId: string) => {
-    try {
-      const resp = await fetch(
-        `/api/parent-pin/payment-request/${requestId}/approve`,
-        {
-          method: "POST",
-        },
-      );
-      const data = await resp.json();
-      if (!resp.ok) {
-        setMsg(data.error || "Failed to approve payment request.");
-        return;
-      }
-      setMsg(`Approved payment and issued PIN ${data.pin}`);
-      fetchPaymentRequests();
-    } catch (err) {
-      console.error("Failed to approve parent PIN payment request:", err);
-      setMsg("Failed to approve payment request.");
-    }
-  };
-
   useEffect(() => {
     if (activeTab === "payments") {
       fetchPaymentRequests();
@@ -1602,8 +1581,8 @@ export default function AdminPanel({
                 Parent PIN Payment Requests
               </h3>
               <p className="text-3xs text-slate-500">
-                Review submitted bank transfers and approve verified payments to
-                issue Parent LINK PINs.
+                Monitor Parent LINK PIN checkout requests. Approved PINs are now
+                issued automatically after live Paystack verification.
               </p>
             </div>
             <button
@@ -1665,13 +1644,9 @@ export default function AdminPanel({
                         <CheckCircle className="w-4 h-4" /> Approved
                       </span>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => approvePaymentRequest(request.id)}
-                        className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition cursor-pointer"
-                      >
-                        Approve & Issue PIN
-                      </button>
+                      <span className="inline-flex items-center gap-1 text-amber-700 font-bold bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                        Awaiting Paystack verification
+                      </span>
                     )}
                   </div>
                 </div>

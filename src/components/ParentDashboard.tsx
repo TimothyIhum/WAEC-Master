@@ -4,7 +4,6 @@ import {
   Unlock,
   ShieldCheck,
   Check,
-  Copy,
   CreditCard,
   ArrowLeft,
 } from "lucide-react";
@@ -24,10 +23,11 @@ interface ParentPinPaymentRequest {
   product: string;
   bankName: string;
   accountNumber: string;
-  status: "pending" | "approved";
+  status: string;
   createdAt: string;
   approvedAt?: string | null;
   issuedPin?: string | null;
+  amountKobo?: number;
 }
 
 export default function ParentDashboard({
@@ -60,8 +60,6 @@ export default function ParentDashboard({
   const [purchaseEmail, setPurchaseEmail] = useState(
     currentConfig.parentEmail || "",
   );
-  const [payerName, setPayerName] = useState("");
-  const [transferReference, setTransferReference] = useState("");
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [purchaseMsg, setPurchaseMsg] = useState("");
   const [showBuyParentLinkPin, setShowBuyParentLinkPin] = useState(false);
@@ -105,57 +103,41 @@ export default function ParentDashboard({
     setShowBuyParentLinkPin(false);
   };
 
-  const handleCopyAccount = async () => {
-    try {
-      await navigator.clipboard.writeText("9153591462");
-      setPurchaseMsg("Account number copied.");
-    } catch {
-      setPurchaseMsg("Copy failed. Account number is 9153591462.");
-    }
-  };
-
   const handleSubmitPaymentRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setPurchaseMsg("");
 
     const guardianEmail = purchaseEmail.trim().toLowerCase();
-    const cleanPayerName = payerName.trim();
-    const cleanReference = transferReference.trim();
-
     if (!guardianEmail || !guardianEmail.includes("@")) {
       setErrorMsg("Enter a valid guardian email.");
-      return;
-    }
-    if (!cleanPayerName || !cleanReference) {
-      setErrorMsg("Payer name and transfer reference are required.");
       return;
     }
 
     setSubmittingPayment(true);
     try {
+      const callbackUrl = `${window.location.origin}${window.location.pathname}?tab=guardian&parentLinkPage=buy`;
       const resp = await fetch("/api/parent-pin/payment-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           guardianEmail,
-          payerName: cleanPayerName,
-          transferReference: cleanReference,
+          callbackUrl,
         }),
       });
       const data = await resp.json();
       if (!resp.ok) {
-        setErrorMsg(data.error || "Failed to submit payment request.");
+        setErrorMsg(data.error || "Failed to initialize payment.");
         return;
       }
-      setPurchaseMsg(
-        "Transfer submitted. We will verify the payment before issuing your Parent PIN.",
-      );
-      setParentEmail(guardianEmail);
-      await handleCheckStatus(guardianEmail);
+      if (data.authorizationUrl) {
+        window.location.href = data.authorizationUrl;
+        return;
+      }
+      setPurchaseMsg("Payment initialized. Continue to checkout.");
     } catch (err) {
       console.error(err);
-      setErrorMsg("Unable to submit payment request right now.");
+      setErrorMsg("Unable to start payment right now.");
     } finally {
       setSubmittingPayment(false);
     }
@@ -192,6 +174,45 @@ export default function ParentDashboard({
       setStatusLoading(false);
     }
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reference = params.get("reference") || params.get("trxref");
+    if (!reference) return;
+
+    const verifyPayment = async () => {
+      setStatusLoading(true);
+      setErrorMsg("");
+      try {
+        const resp = await fetch(
+          `/api/parent-pin/payment-request/verify/${encodeURIComponent(reference)}`,
+        );
+        const data = await resp.json();
+        if (!resp.ok) {
+          setErrorMsg(data.error || "Failed to verify payment.");
+          return;
+        }
+        if (data.verified && data.pin) {
+          setPurchaseMsg(
+            `Payment verified successfully. Your Parent PIN is ${data.pin}.`,
+          );
+          setPinInput(data.pin);
+          if (data.request?.guardianEmail) {
+            setParentEmail(data.request.guardianEmail);
+            setPurchaseEmail(data.request.guardianEmail);
+          }
+          await handleCheckStatus(data.request?.guardianEmail);
+        }
+      } catch (err) {
+        console.error(err);
+        setErrorMsg("Unable to verify payment right now.");
+      } finally {
+        setStatusLoading(false);
+      }
+    };
+
+    verifyPayment();
+  }, []);
 
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,9 +285,9 @@ export default function ParentDashboard({
               Parent access requires payment verification. Each approved Parent
               PIN can only link up to 2 students.
             </p>
-            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-              Automatic OPay transfer verification is not available yet in-app,
-              so payment requests are verified before the PIN is issued.
+            <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+              Payments are verified live through Paystack before the Parent PIN
+              is issued.
             </p>
           </div>
 
@@ -296,41 +317,24 @@ export default function ParentDashboard({
                     Buy Parent Link Pin
                   </h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Complete your bank transfer, submit the payment details for
-                    verification, and your approved Parent PIN will be issued
-                    after review.
+                    Enter the guardian email, continue to Paystack checkout, and
+                    your Parent PIN will be issued automatically after live
+                    payment verification.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-white border border-slate-100 rounded-2xl p-5 space-y-4">
                     <div className="flex items-center gap-2 text-slate-900 font-bold">
-                      <CreditCard className="w-5 h-5 text-indigo-600" /> Bank
-                      Transfer Details
+                      <CreditCard className="w-5 h-5 text-indigo-600" /> Live
+                      Payment Verification
                     </div>
                     <div className="space-y-2 text-sm">
                       <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
                         <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
-                          Bank
+                          Provider
                         </p>
-                        <p className="font-bold text-slate-900">OPAY</p>
-                      </div>
-                      <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
-                        <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
-                          Account Number
-                        </p>
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="font-bold text-slate-900 text-lg tracking-wider">
-                            9153591462
-                          </p>
-                          <button
-                            type="button"
-                            onClick={handleCopyAccount}
-                            className="text-xs font-bold text-indigo-600 hover:text-indigo-700 cursor-pointer"
-                          >
-                            <Copy className="w-4 h-4 inline mr-1" /> Copy
-                          </button>
-                        </div>
+                        <p className="font-bold text-slate-900">Paystack</p>
                       </div>
                       <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
                         <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
@@ -338,6 +342,14 @@ export default function ParentDashboard({
                         </p>
                         <p className="font-bold text-slate-900">
                           Parent LINK PIN (up to 2 students)
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                        <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
+                          Verification
+                        </p>
+                        <p className="font-bold text-slate-900">
+                          Automatic after successful Paystack payment
                         </p>
                       </div>
                     </div>
@@ -348,7 +360,7 @@ export default function ParentDashboard({
                     className="bg-white border border-slate-100 rounded-2xl p-5 space-y-3"
                   >
                     <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Submit Transfer For Verification
+                      Proceed to Paystack Checkout
                     </p>
                     <input
                       type="email"
@@ -358,30 +370,14 @@ export default function ParentDashboard({
                       onChange={(e) => setPurchaseEmail(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
                     />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Payer full name"
-                      value={payerName}
-                      onChange={(e) => setPayerName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Transfer reference / narration"
-                      value={transferReference}
-                      onChange={(e) => setTransferReference(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
-                    />
                     <button
                       type="submit"
                       disabled={submittingPayment}
                       className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-60"
                     >
                       {submittingPayment
-                        ? "Submitting..."
-                        : "Submit Payment Request"}
+                        ? "Redirecting..."
+                        : "Pay with Paystack"}
                     </button>
                   </form>
                 </div>
