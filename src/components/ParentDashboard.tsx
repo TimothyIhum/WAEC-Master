@@ -63,6 +63,7 @@ export default function ParentDashboard({
   const [transferReference, setTransferReference] = useState("");
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [purchaseMsg, setPurchaseMsg] = useState("");
+  const [showBuyParentLinkPin, setShowBuyParentLinkPin] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
   const [paymentRequests, setPaymentRequests] = useState<
     ParentPinPaymentRequest[]
@@ -238,86 +239,105 @@ export default function ParentDashboard({
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center gap-2 text-slate-900 font-bold">
-                <CreditCard className="w-5 h-5 text-indigo-600" /> Bank Transfer
-                Details
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="rounded-xl bg-white border border-slate-200 p-3">
-                  <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
-                    Bank
-                  </p>
-                  <p className="font-bold text-slate-900">OPAY</p>
-                </div>
-                <div className="rounded-xl bg-white border border-slate-200 p-3">
-                  <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
-                    Account Number
-                  </p>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-bold text-slate-900 text-lg tracking-wider">
-                      9153591462
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleCopyAccount}
-                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 cursor-pointer"
-                    >
-                      <Copy className="w-4 h-4 inline mr-1" /> Copy
-                    </button>
-                  </div>
-                </div>
-                <div className="rounded-xl bg-white border border-slate-200 p-3">
-                  <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
-                    Product
-                  </p>
-                  <p className="font-bold text-slate-900">
-                    Parent LINK PIN (up to 2 students)
-                  </p>
-                </div>
-              </div>
+          <div className="space-y-4">
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowBuyParentLinkPin((prev) => !prev)}
+                className="py-3 px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2"
+              >
+                <CreditCard className="w-4 h-4" />
+                {showBuyParentLinkPin
+                  ? "Hide Purchase Details"
+                  : "Buy Parent Link Pin"}
+              </button>
             </div>
 
-            <form
-              onSubmit={handleSubmitPaymentRequest}
-              className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-3"
-            >
-              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Submit Transfer For Verification
-              </p>
-              <input
-                type="email"
-                required
-                placeholder="Guardian email"
-                value={purchaseEmail}
-                onChange={(e) => setPurchaseEmail(e.target.value)}
-                className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
-              />
-              <input
-                type="text"
-                required
-                placeholder="Payer full name"
-                value={payerName}
-                onChange={(e) => setPayerName(e.target.value)}
-                className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
-              />
-              <input
-                type="text"
-                required
-                placeholder="Transfer reference / narration"
-                value={transferReference}
-                onChange={(e) => setTransferReference(e.target.value)}
-                className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
-              />
-              <button
-                type="submit"
-                disabled={submittingPayment}
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-60"
-              >
-                {submittingPayment ? "Submitting..." : "Submit Payment Request"}
-              </button>
-            </form>
+            {showBuyParentLinkPin && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold">
+                    <CreditCard className="w-5 h-5 text-indigo-600" /> Bank
+                    Transfer Details
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="rounded-xl bg-white border border-slate-200 p-3">
+                      <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
+                        Bank
+                      </p>
+                      <p className="font-bold text-slate-900">OPAY</p>
+                    </div>
+                    <div className="rounded-xl bg-white border border-slate-200 p-3">
+                      <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
+                        Account Number
+                      </p>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-bold text-slate-900 text-lg tracking-wider">
+                          9153591462
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleCopyAccount}
+                          className="text-xs font-bold text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                        >
+                          <Copy className="w-4 h-4 inline mr-1" /> Copy
+                        </button>
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-white border border-slate-200 p-3">
+                      <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
+                        Product
+                      </p>
+                      <p className="font-bold text-slate-900">
+                        Parent LINK PIN (up to 2 students)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <form
+                  onSubmit={handleSubmitPaymentRequest}
+                  className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-3"
+                >
+                  <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Submit Transfer For Verification
+                  </p>
+                  <input
+                    type="email"
+                    required
+                    placeholder="Guardian email"
+                    value={purchaseEmail}
+                    onChange={(e) => setPurchaseEmail(e.target.value)}
+                    className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
+                  />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Payer full name"
+                    value={payerName}
+                    onChange={(e) => setPayerName(e.target.value)}
+                    className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
+                  />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Transfer reference / narration"
+                    value={transferReference}
+                    onChange={(e) => setTransferReference(e.target.value)}
+                    className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
+                  />
+                  <button
+                    type="submit"
+                    disabled={submittingPayment}
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-60"
+                  >
+                    {submittingPayment
+                      ? "Submitting..."
+                      : "Submit Payment Request"}
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
 
           <div className="bg-white border border-slate-100 rounded-2xl p-5 space-y-4">
