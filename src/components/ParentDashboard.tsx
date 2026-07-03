@@ -1,5 +1,12 @@
 import React, { useMemo, useState } from "react";
-import { Lock, Unlock, ShieldCheck, Check } from "lucide-react";
+import {
+  Lock,
+  Unlock,
+  ShieldCheck,
+  Check,
+  Copy,
+  CreditCard,
+} from "lucide-react";
 import { UserProgress, ParentCheckpoint } from "../types";
 
 interface ParentDashboardProps {
@@ -8,38 +15,19 @@ interface ParentDashboardProps {
   currentConfig: ParentCheckpoint;
 }
 
-interface PaidPinRecord {
-  pin: string;
-  ownerEmail: string;
-  linkedStudents: string[];
-  maxLinks: number;
-  purchasedAt: string;
+interface ParentPinPaymentRequest {
+  id: string;
+  guardianEmail: string;
+  payerName: string;
+  transferReference: string;
+  product: string;
+  bankName: string;
+  accountNumber: string;
+  status: "pending" | "approved";
+  createdAt: string;
+  approvedAt?: string | null;
+  issuedPin?: string | null;
 }
-
-const PAID_PIN_REGISTRY_KEY = "waec_paid_parent_pins";
-
-const readPaidPinRegistry = (): PaidPinRecord[] => {
-  const saved = localStorage.getItem(PAID_PIN_REGISTRY_KEY);
-  if (!saved) return [];
-  try {
-    const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
-const writePaidPinRegistry = (records: PaidPinRecord[]) => {
-  localStorage.setItem(PAID_PIN_REGISTRY_KEY, JSON.stringify(records));
-};
-
-const generatePin = (existingPins: Set<string>) => {
-  let pin = "";
-  do {
-    pin = String(Math.floor(100000 + Math.random() * 900000));
-  } while (existingPins.has(pin));
-  return pin;
-};
 
 export default function ParentDashboard({
   progress,
@@ -68,109 +56,147 @@ export default function ParentDashboard({
     currentConfig.parentNotes || "",
   );
 
-  const [paidPins, setPaidPins] = useState<PaidPinRecord[]>(() =>
-    readPaidPinRegistry(),
-  );
   const [purchaseEmail, setPurchaseEmail] = useState(
     currentConfig.parentEmail || "",
   );
-  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [payerName, setPayerName] = useState("");
+  const [transferReference, setTransferReference] = useState("");
+  const [submittingPayment, setSubmittingPayment] = useState(false);
   const [purchaseMsg, setPurchaseMsg] = useState("");
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [paymentRequests, setPaymentRequests] = useState<
+    ParentPinPaymentRequest[]
+  >([]);
 
-  const linkedInfo = useMemo(() => {
-    const rec = paidPins.find((p) => p.pin === currentConfig.parentPin);
-    if (!rec) return null;
-    return {
-      used: rec.linkedStudents.length,
-      max: rec.maxLinks,
-    };
-  }, [paidPins, currentConfig.parentPin]);
+  const latestRequest = useMemo(
+    () => paymentRequests[0] || null,
+    [paymentRequests],
+  );
 
-  const handlePurchasePin = (e: React.FormEvent) => {
+  const handleCopyAccount = async () => {
+    try {
+      await navigator.clipboard.writeText("9153591462");
+      setPurchaseMsg("Account number copied.");
+    } catch {
+      setPurchaseMsg("Copy failed. Account number is 9153591462.");
+    }
+  };
+
+  const handleSubmitPaymentRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setPurchaseMsg("");
 
-    const email = purchaseEmail.trim().toLowerCase();
-    if (!email || !email.includes("@")) {
-      setErrorMsg("Enter a valid guardian email before purchasing a PIN.");
+    const guardianEmail = purchaseEmail.trim().toLowerCase();
+    const cleanPayerName = payerName.trim();
+    const cleanReference = transferReference.trim();
+
+    if (!guardianEmail || !guardianEmail.includes("@")) {
+      setErrorMsg("Enter a valid guardian email.");
+      return;
+    }
+    if (!cleanPayerName || !cleanReference) {
+      setErrorMsg("Payer name and transfer reference are required.");
       return;
     }
 
-    setIsPurchasing(true);
-    setTimeout(() => {
-      const existingPins = new Set(paidPins.map((p) => p.pin));
-      const pin = generatePin(existingPins);
-
-      const record: PaidPinRecord = {
-        pin,
-        ownerEmail: email,
-        linkedStudents: [],
-        maxLinks: 2,
-        purchasedAt: new Date().toISOString(),
-      };
-
-      const updated = [record, ...paidPins];
-      setPaidPins(updated);
-      writePaidPinRegistry(updated);
-
-      setPinInput(pin);
-      setPurchaseMsg(
-        `Payment confirmed. Your Parent PIN is ${pin}. This PIN can link up to 2 students.`,
-      );
-
-      onUpdateParentConfig({
-        ...currentConfig,
-        parentPin: pin,
-        parentEmail: email,
+    setSubmittingPayment(true);
+    try {
+      const resp = await fetch("/api/parent-pin/payment-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guardianEmail,
+          payerName: cleanPayerName,
+          transferReference: cleanReference,
+        }),
       });
-
-      setParentEmail(email);
-      setIsPurchasing(false);
-    }, 700);
+      const data = await resp.json();
+      if (!resp.ok) {
+        setErrorMsg(data.error || "Failed to submit payment request.");
+        return;
+      }
+      setPurchaseMsg(
+        "Transfer submitted. We will verify the payment before issuing your Parent PIN.",
+      );
+      setParentEmail(guardianEmail);
+      await handleCheckStatus(guardianEmail);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Unable to submit payment request right now.");
+    } finally {
+      setSubmittingPayment(false);
+    }
   };
 
-  const handleUnlock = (e: React.FormEvent) => {
+  const handleCheckStatus = async (emailOverride?: string) => {
+    const guardianEmail = String(emailOverride || purchaseEmail || parentEmail)
+      .trim()
+      .toLowerCase();
+    if (!guardianEmail) {
+      setErrorMsg("Enter the guardian email used for payment to check status.");
+      return;
+    }
+
+    setStatusLoading(true);
+    setErrorMsg("");
+    try {
+      const resp = await fetch(
+        `/api/parent-pin/payment-request?guardianEmail=${encodeURIComponent(guardianEmail)}`,
+      );
+      const data = await resp.json();
+      if (!resp.ok) {
+        setErrorMsg(data.error || "Failed to check payment status.");
+        return;
+      }
+      setPaymentRequests(Array.isArray(data) ? data : []);
+      if (!data.length) {
+        setPurchaseMsg("No payment request found for this email yet.");
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Unable to check payment status right now.");
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
+  const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanPin = pinInput.trim();
 
-    const matchedPin = paidPins.find((p) => p.pin === cleanPin);
-    if (!matchedPin) {
-      setErrorMsg("PIN not found. Purchase a Parent PIN to unlock safeguards.");
+    if (!cleanPin) {
+      setErrorMsg("Enter your approved Parent PIN.");
       return;
     }
 
-    const alreadyLinked = matchedPin.linkedStudents.includes(progress.username);
-    if (
-      !alreadyLinked &&
-      matchedPin.linkedStudents.length >= matchedPin.maxLinks
-    ) {
-      setErrorMsg(
-        `This PIN already has ${matchedPin.maxLinks} linked students. Purchase another PIN to link more students.`,
-      );
-      return;
+    try {
+      const resp = await fetch("/api/parent-pin/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pin: cleanPin,
+          studentUsername: progress.username,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        setErrorMsg(data.error || "Unable to unlock parent safeguards.");
+        return;
+      }
+
+      onUpdateParentConfig({
+        ...currentConfig,
+        parentPin: cleanPin,
+        parentEmail: data.ownerEmail || parentEmail,
+      });
+      setParentEmail(data.ownerEmail || parentEmail);
+      setAuthenticated(true);
+      setErrorMsg("");
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Unable to unlock safeguards right now.");
     }
-
-    const nextRegistry = paidPins.map((p) => {
-      if (p.pin !== cleanPin) return p;
-      if (alreadyLinked) return p;
-      return {
-        ...p,
-        linkedStudents: [...p.linkedStudents, progress.username],
-      };
-    });
-
-    setPaidPins(nextRegistry);
-    writePaidPinRegistry(nextRegistry);
-
-    onUpdateParentConfig({
-      ...currentConfig,
-      parentPin: cleanPin,
-      parentEmail: matchedPin.ownerEmail || parentEmail,
-    });
-
-    setAuthenticated(true);
-    setErrorMsg("");
   };
 
   const handleSaveConfig = (e: React.FormEvent) => {
@@ -194,71 +220,175 @@ export default function ParentDashboard({
       className="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-xl max-w-4xl mx-auto space-y-8"
     >
       {!authenticated ? (
-        <div
-          id="parent-locked-screen"
-          className="text-center py-10 space-y-6 max-w-md mx-auto"
-        >
-          <div className="inline-flex p-4.5 bg-indigo-50 text-indigo-700 rounded-3xl shadow-sm relative">
-            <Lock className="w-10 h-10" />
-          </div>
-
-          <div className="space-y-2">
+        <div className="space-y-6 max-w-2xl mx-auto">
+          <div className="text-center space-y-3">
+            <div className="inline-flex p-4.5 bg-indigo-50 text-indigo-700 rounded-3xl shadow-sm relative">
+              <Lock className="w-10 h-10" />
+            </div>
             <h3 className="font-display font-extrabold text-xl text-slate-900">
               Parent/Guardian Safety LINK
             </h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Parent access requires a paid PIN. Each PIN can only link up to 2
-              students.
+              Parent access requires payment verification. Each approved Parent
+              PIN can only link up to 2 students.
+            </p>
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              Automatic OPay transfer verification is not available yet in-app,
+              so payment requests are verified before the PIN is issued.
             </p>
           </div>
 
-          <form
-            onSubmit={handlePurchasePin}
-            className="space-y-3 bg-slate-50 border border-slate-100 rounded-2xl p-4 text-left"
-          >
-            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Purchase Parent PIN
-            </p>
-            <input
-              type="email"
-              required
-              placeholder="Guardian email"
-              value={purchaseEmail}
-              onChange={(e) => setPurchaseEmail(e.target.value)}
-              className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
-            />
-            <button
-              type="submit"
-              disabled={isPurchasing}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-60"
-            >
-              {isPurchasing ? "Processing Payment..." : "Pay & Generate PIN"}
-            </button>
-            {purchaseMsg && (
-              <p className="text-2xs text-emerald-700 font-semibold">
-                {purchaseMsg}
-              </p>
-            )}
-          </form>
-
-          <form onSubmit={handleUnlock} className="space-y-4">
-            <div className="space-y-1">
-              <input
-                type="password"
-                required
-                maxLength={6}
-                placeholder="Enter paid Parent PIN"
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-250 focus:border-indigo-500 rounded-xl py-3 text-center text-lg font-bold tracking-widest focus:outline-hidden"
-              />
-              {errorMsg && (
-                <p className="text-red-500 text-3xs font-semibold">
-                  {errorMsg}
-                </p>
-              )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center gap-2 text-slate-900 font-bold">
+                <CreditCard className="w-5 h-5 text-indigo-600" /> Bank Transfer
+                Details
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="rounded-xl bg-white border border-slate-200 p-3">
+                  <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
+                    Bank
+                  </p>
+                  <p className="font-bold text-slate-900">OPAY</p>
+                </div>
+                <div className="rounded-xl bg-white border border-slate-200 p-3">
+                  <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
+                    Account Number
+                  </p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-bold text-slate-900 text-lg tracking-wider">
+                      9153591462
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCopyAccount}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                    >
+                      <Copy className="w-4 h-4 inline mr-1" /> Copy
+                    </button>
+                  </div>
+                </div>
+                <div className="rounded-xl bg-white border border-slate-200 p-3">
+                  <p className="text-slate-400 text-xs uppercase font-bold tracking-wider">
+                    Product
+                  </p>
+                  <p className="font-bold text-slate-900">
+                    Parent LINK PIN (up to 2 students)
+                  </p>
+                </div>
+              </div>
             </div>
 
+            <form
+              onSubmit={handleSubmitPaymentRequest}
+              className="bg-slate-50 border border-slate-100 rounded-2xl p-5 space-y-3"
+            >
+              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Submit Transfer For Verification
+              </p>
+              <input
+                type="email"
+                required
+                placeholder="Guardian email"
+                value={purchaseEmail}
+                onChange={(e) => setPurchaseEmail(e.target.value)}
+                className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
+              />
+              <input
+                type="text"
+                required
+                placeholder="Payer full name"
+                value={payerName}
+                onChange={(e) => setPayerName(e.target.value)}
+                className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
+              />
+              <input
+                type="text"
+                required
+                placeholder="Transfer reference / narration"
+                value={transferReference}
+                onChange={(e) => setTransferReference(e.target.value)}
+                className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
+              />
+              <button
+                type="submit"
+                disabled={submittingPayment}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-60"
+              >
+                {submittingPayment ? "Submitting..." : "Submit Payment Request"}
+              </button>
+            </form>
+          </div>
+
+          <div className="bg-white border border-slate-100 rounded-2xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Check Payment Status
+                </p>
+                <p className="text-3xs text-slate-500">
+                  Once approved, your PIN appears here and can be used to unlock
+                  safeguards.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleCheckStatus()}
+                className="py-2 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                {statusLoading ? "Checking..." : "Check Status"}
+              </button>
+            </div>
+
+            {purchaseMsg && (
+              <div className="text-2xs text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                {purchaseMsg}
+              </div>
+            )}
+            {errorMsg && (
+              <div className="text-2xs text-red-700 font-semibold bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                {errorMsg}
+              </div>
+            )}
+
+            {latestRequest && (
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-2 text-sm">
+                <p>
+                  <span className="font-bold text-slate-700">Status:</span>{" "}
+                  <span
+                    className={`font-bold ${latestRequest.status === "approved" ? "text-emerald-600" : "text-amber-600"}`}
+                  >
+                    {latestRequest.status}
+                  </span>
+                </p>
+                <p>
+                  <span className="font-bold text-slate-700">Reference:</span>{" "}
+                  {latestRequest.transferReference}
+                </p>
+                {latestRequest.issuedPin && (
+                  <p>
+                    <span className="font-bold text-slate-700">
+                      Issued PIN:
+                    </span>{" "}
+                    <span className="font-mono font-black text-indigo-700 tracking-widest">
+                      {latestRequest.issuedPin}
+                    </span>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <form onSubmit={handleUnlock} className="space-y-4 max-w-md mx-auto">
+            <input
+              type="password"
+              required
+              maxLength={6}
+              placeholder="Enter approved Parent PIN"
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-250 focus:border-indigo-500 rounded-xl py-3 text-center text-lg font-bold tracking-widest focus:outline-hidden"
+            />
             <button
               type="submit"
               className="w-full py-3 bg-slate-950 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition flex justify-center items-center gap-2 cursor-pointer"
@@ -266,10 +396,6 @@ export default function ParentDashboard({
               <Unlock className="w-4 h-4" /> Unlock Safeguards
             </button>
           </form>
-
-          <p className="text-3xs text-slate-400">
-            No default PIN exists. Access is limited to paid PINs only.
-          </p>
         </div>
       ) : (
         <div id="parent-active-workspace" className="space-y-8 animate-fadeIn">
@@ -283,13 +409,7 @@ export default function ParentDashboard({
                 You are monitoring statistics for candidate:{" "}
                 <b>{progress.username}</b>
               </p>
-              {linkedInfo && (
-                <p className="text-2xs text-indigo-600 font-semibold mt-1">
-                  PIN usage: {linkedInfo.used}/{linkedInfo.max} students linked
-                </p>
-              )}
             </div>
-
             <button
               onClick={() => setAuthenticated(false)}
               className="p-1 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-2xs font-bold transition cursor-pointer"
@@ -310,7 +430,6 @@ export default function ParentDashboard({
                 Daily Goal: {dailyGoalMinutes} minutes
               </p>
             </div>
-
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-1">
               <span className="text-3xs font-bold text-slate-400 uppercase tracking-widest block">
                 Accuracy Assessment
@@ -322,7 +441,6 @@ export default function ParentDashboard({
                 WAEC standard benchmark: 75% for A1
               </p>
             </div>
-
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-1">
               <span className="text-3xs font-bold text-slate-400 uppercase tracking-widest block">
                 Current Motivation Streak
@@ -344,7 +462,6 @@ export default function ParentDashboard({
               <h3 className="text-sm font-black text-slate-500 uppercase tracking-wider">
                 Adjustment Parameters
               </h3>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1 text-xs">
                   <label className="font-bold text-slate-600 block">
@@ -373,7 +490,6 @@ export default function ParentDashboard({
                   />
                 </div>
               </div>
-
               <div className="space-y-1 text-xs">
                 <label className="font-bold text-slate-600 block">
                   Your Reward Pledge Offer (Displays on Child’s Dashboard)
@@ -386,7 +502,6 @@ export default function ParentDashboard({
                   className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 focus:outline-hidden font-sans font-medium"
                 />
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1 text-xs">
                   <label className="font-bold text-slate-600 block">
@@ -421,7 +536,6 @@ export default function ParentDashboard({
                   </select>
                 </div>
               </div>
-
               <div className="space-y-1 text-xs">
                 <label className="font-bold text-slate-600 block">
                   Motivational Encouragement note
@@ -434,7 +548,6 @@ export default function ParentDashboard({
                   className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-2xl py-2.5 px-3 focus:outline-hidden resize-none"
                 />
               </div>
-
               <div className="flex justify-between items-center bg-white border border-slate-100 p-4 rounded-xl">
                 {successSaved ? (
                   <span className="text-emerald-700 font-bold text-xs flex items-center gap-1">
@@ -453,47 +566,6 @@ export default function ParentDashboard({
                 </button>
               </div>
             </form>
-
-            <div className="lg:col-span-4 space-y-6">
-              <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 space-y-4">
-                <h4 className="font-display font-bold text-slate-900 text-sm">
-                  Parent Checklist
-                </h4>
-                <p className="text-3xs text-slate-500 leading-normal">
-                  Guidance for maximizing your child’s WAEC success:
-                </p>
-
-                <div className="space-y-2.5 text-2xs text-slate-600">
-                  <div className="flex gap-2">
-                    <span className="text-emerald-500 shrink-0 font-bold">
-                      ✓
-                    </span>
-                    <p>
-                      Allocate a dedicated study hour free from external social
-                      distractions.
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-emerald-500 shrink-0 font-bold">
-                      ✓
-                    </span>
-                    <p>
-                      Reward their consistency milestones rather than raw
-                      scores.
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-emerald-500 shrink-0 font-bold">
-                      ✓
-                    </span>
-                    <p>
-                      Utilize the "Allowed Hours" feature to reinforce sleep
-                      consistency during exam weeks.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       )}

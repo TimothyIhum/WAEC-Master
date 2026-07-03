@@ -57,6 +57,7 @@ export default function AdminPanel({
     | "users"
     | "announcements"
     | "subjects"
+    | "payments"
     | "otp"
   >("questions");
 
@@ -86,6 +87,9 @@ export default function AdminPanel({
   const [adminOtpVerifying, setAdminOtpVerifying] = useState(false);
   const [adminOtpError, setAdminOtpError] = useState("");
   const [adminOtpSuccessMsg, setAdminOtpSuccessMsg] = useState("");
+
+  const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
+  const [paymentRequestsLoading, setPaymentRequestsLoading] = useState(false);
 
   // Countdown timer for generated OTP
   useEffect(() => {
@@ -219,6 +223,46 @@ export default function AdminPanel({
   React.useEffect(() => {
     localStorage.setItem("waec_registered_users", JSON.stringify(candidates));
   }, [candidates]);
+
+  const fetchPaymentRequests = async () => {
+    setPaymentRequestsLoading(true);
+    try {
+      const resp = await fetch("/api/parent-pin/payment-request");
+      const data = await resp.json();
+      if (resp.ok) setPaymentRequests(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load parent PIN payment requests:", err);
+    } finally {
+      setPaymentRequestsLoading(false);
+    }
+  };
+
+  const approvePaymentRequest = async (requestId: string) => {
+    try {
+      const resp = await fetch(
+        `/api/parent-pin/payment-request/${requestId}/approve`,
+        {
+          method: "POST",
+        },
+      );
+      const data = await resp.json();
+      if (!resp.ok) {
+        setMsg(data.error || "Failed to approve payment request.");
+        return;
+      }
+      setMsg(`Approved payment and issued PIN ${data.pin}`);
+      fetchPaymentRequests();
+    } catch (err) {
+      console.error("Failed to approve parent PIN payment request:", err);
+      setMsg("Failed to approve payment request.");
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "payments") {
+      fetchPaymentRequests();
+    }
+  }, [activeTab]);
 
   const handleAddQuestionLocal = (e: React.FormEvent) => {
     e.preventDefault();
@@ -437,6 +481,7 @@ export default function AdminPanel({
             "users",
             "announcements",
             "subjects",
+            "payments",
             "otp",
           ] as const
         ).map((tab) => (
@@ -1544,6 +1589,96 @@ export default function AdminPanel({
           onAddQuestion={onAddQuestion}
           subjectsList={subjectsList}
         />
+      )}
+
+      {activeTab === "payments" && (
+        <div
+          id="admin-payments-tab"
+          className="space-y-6 pt-4 animate-fadeIn text-xs"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="font-display font-bold text-slate-800 text-sm">
+                Parent PIN Payment Requests
+              </h3>
+              <p className="text-3xs text-slate-500">
+                Review submitted bank transfers and approve verified payments to
+                issue Parent LINK PINs.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchPaymentRequests}
+              className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition cursor-pointer flex items-center gap-1"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${paymentRequestsLoading ? "animate-spin" : ""}`}
+              />{" "}
+              Refresh
+            </button>
+          </div>
+
+          {paymentRequestsLoading ? (
+            <div className="text-slate-500 font-semibold py-8">
+              Loading payment requests...
+            </div>
+          ) : paymentRequests.length === 0 ? (
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 text-slate-500">
+              No parent PIN payment requests yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {paymentRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="bg-white border border-slate-100 rounded-2xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <p className="font-bold text-slate-900">
+                      {request.payerName}
+                    </p>
+                    <p className="text-slate-500">{request.guardianEmail}</p>
+                    <p className="text-slate-500">
+                      Reference: {request.transferReference}
+                    </p>
+                    <p className="text-slate-500">Product: {request.product}</p>
+                    <p className="text-slate-500">
+                      Paid to: {request.bankName} / {request.accountNumber}
+                    </p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${request.status === "approved" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+                      >
+                        {request.status}
+                      </span>
+                      {request.issuedPin && (
+                        <span className="text-indigo-700 font-black tracking-widest">
+                          PIN: {request.issuedPin}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    {request.status === "approved" ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                        <CheckCircle className="w-4 h-4" /> Approved
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => approvePaymentRequest(request.id)}
+                        className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition cursor-pointer"
+                      >
+                        Approve & Issue PIN
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* TAB 6: SUBJECT MANAGEMENT */}

@@ -865,6 +865,8 @@ app.post("/api/auth/login", async (req, res) => {
 let announcements: any[] = [];
 let discussions: any[] = [];
 let leaderboardEntries: any[] = [];
+let parentPinPaymentRequests: any[] = [];
+let parentPins: any[] = [];
 
 // Lazy-initialized Gemini Client
 let aiClient: GoogleGenAI | null = null;
@@ -886,6 +888,229 @@ function getGeminiClient(): GoogleGenAI | null {
 }
 
 // REST APIs
+const PARENT_PIN_PAYMENT_REQUESTS_COLLECTION = "parent_pin_payment_requests";
+const PARENT_PINS_COLLECTION = "parent_pins";
+
+const createServerId = (prefix: string) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const generateParentPin = (existingPins: Set<string>) => {
+  let pin = "";
+  do {
+    pin = String(Math.floor(100000 + Math.random() * 900000));
+  } while (existingPins.has(pin));
+  return pin;
+};
+
+async function listParentPinPaymentRequests() {
+  try {
+    const snap = await fGetDocs(
+      fCol(db, PARENT_PIN_PAYMENT_REQUESTS_COLLECTION),
+    );
+    const records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    return records.sort((a: any, b: any) =>
+      String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+    );
+  } catch {
+    return [...parentPinPaymentRequests].sort((a: any, b: any) =>
+      String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+    );
+  }
+}
+
+async function listParentPins() {
+  try {
+    const snap = await fGetDocs(fCol(db, PARENT_PINS_COLLECTION));
+    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch {
+    return [...parentPins];
+  }
+}
+
+app.post("/api/parent-pin/payment-request", async (req, res) => {
+  const { guardianEmail, payerName, transferReference } = req.body || {};
+  const cleanEmail = String(guardianEmail || "")
+    .trim()
+    .toLowerCase();
+  const cleanPayerName = String(payerName || "").trim();
+  const cleanReference = String(transferReference || "").trim();
+
+  if (!cleanEmail || !cleanPayerName || !cleanReference) {
+    return res.status(400).json({
+      error: "Guardian email, payer name, and transfer reference are required.",
+    });
+  }
+
+  const requestRecord = {
+    id: createServerId("parent-pay"),
+    guardianEmail: cleanEmail,
+    payerName: cleanPayerName,
+    transferReference: cleanReference,
+    product: "Parent LINK PIN (2 students)",
+    bankName: "OPAY",
+    accountNumber: "9153591462",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    approvedAt: null,
+    issuedPin: null,
+  };
+
+  parentPinPaymentRequests = [
+    requestRecord,
+    ...parentPinPaymentRequests.filter((r) => r.id !== requestRecord.id),
+  ];
+
+  try {
+    await fSetDoc(
+      fDoc(db, PARENT_PIN_PAYMENT_REQUESTS_COLLECTION, requestRecord.id),
+      requestRecord,
+    );
+  } catch (err) {
+    console.error("Failed to persist parent PIN payment request:", err);
+  }
+
+  return res.status(201).json({
+    success: true,
+    request: requestRecord,
+    message: "Payment request submitted. Awaiting verification.",
+  });
+});
+
+app.get("/api/parent-pin/payment-request", async (req, res) => {
+  const guardianEmail = String(req.query.guardianEmail || "")
+    .trim()
+    .toLowerCase();
+  const requests = await listParentPinPaymentRequests();
+  const filtered = guardianEmail
+    ? requests.filter(
+        (item: any) =>
+          String(item.guardianEmail || "").toLowerCase() === guardianEmail,
+      )
+    : requests;
+  return res.json(filtered);
+});
+
+app.post("/api/parent-pin/payment-request/:id/approve", async (req, res) => {
+  const requestId = String(req.params.id || "").trim();
+  if (!requestId) {
+    return res.status(400).json({ error: "Payment request id is required." });
+  }
+
+  const requests = await listParentPinPaymentRequests();
+  const requestRecord = requests.find((item: any) => item.id === requestId);
+  if (!requestRecord) {
+    return res.status(404).json({ error: "Payment request not found." });
+  }
+
+  if (requestRecord.status === "approved" && requestRecord.issuedPin) {
+    return res.json({
+      success: true,
+      pin: requestRecord.issuedPin,
+      message: "Payment request was already approved.",
+    });
+  }
+
+  const existingPins = await listParentPins();
+  const pin = generateParentPin(
+    new Set(existingPins.map((item: any) => String(item.pin))),
+  );
+  const pinRecord = {
+    id: pin,
+    pin,
+    ownerEmail: requestRecord.guardianEmail,
+    linkedStudents: [],
+    maxLinks: 2,
+    purchasedAt: new Date().toISOString(),
+    requestId,
+  };
+  const approvedRequest = {
+    ...requestRecord,
+    status: "approved",
+    approvedAt: new Date().toISOString(),
+    issuedPin: pin,
+  };
+
+  parentPins = [pinRecord, ...parentPins.filter((item) => item.pin !== pin)];
+  parentPinPaymentRequests = parentPinPaymentRequests.map((item) =>
+    item.id === requestId ? approvedRequest : item,
+  );
+
+  try {
+    await fSetDoc(fDoc(db, PARENT_PINS_COLLECTION, pin), pinRecord);
+    await fSetDoc(
+      fDoc(db, PARENT_PIN_PAYMENT_REQUESTS_COLLECTION, requestId),
+      approvedRequest,
+    );
+  } catch (err) {
+    console.error("Failed to approve parent PIN payment request:", err);
+  }
+
+  return res.json({
+    success: true,
+    pin,
+    request: approvedRequest,
+    message: "Payment approved and Parent PIN issued.",
+  });
+});
+
+app.post("/api/parent-pin/unlock", async (req, res) => {
+  const cleanPin = String(req.body?.pin || "").trim();
+  const studentUsername = String(req.body?.studentUsername || "").trim();
+
+  if (!cleanPin || !studentUsername) {
+    return res
+      .status(400)
+      .json({ error: "PIN and student username are required." });
+  }
+
+  const allPins = await listParentPins();
+  const matchedPin = allPins.find((item: any) => String(item.pin) === cleanPin);
+  if (!matchedPin) {
+    return res
+      .status(404)
+      .json({ error: "PIN not found or not yet approved." });
+  }
+
+  const linkedStudents = Array.isArray(matchedPin.linkedStudents)
+    ? matchedPin.linkedStudents
+    : [];
+  const alreadyLinked = linkedStudents.includes(studentUsername);
+
+  if (
+    !alreadyLinked &&
+    linkedStudents.length >= Number(matchedPin.maxLinks ?? 2)
+  ) {
+    return res.status(403).json({
+      error: `This PIN already has ${Number(matchedPin.maxLinks ?? 2)} linked students.`,
+    });
+  }
+
+  const updatedPin = {
+    ...matchedPin,
+    linkedStudents: alreadyLinked
+      ? linkedStudents
+      : [...linkedStudents, studentUsername],
+  };
+
+  parentPins = parentPins.map((item) =>
+    item.pin === cleanPin ? updatedPin : item,
+  );
+
+  try {
+    await fSetDoc(fDoc(db, PARENT_PINS_COLLECTION, cleanPin), updatedPin);
+  } catch (err) {
+    console.error("Failed to update linked students for parent pin:", err);
+  }
+
+  return res.json({
+    success: true,
+    pin: cleanPin,
+    ownerEmail: updatedPin.ownerEmail,
+    linkedStudents: updatedPin.linkedStudents,
+    maxLinks: Number(updatedPin.maxLinks ?? 2),
+  });
+});
+
 app.get("/api/announcements", (req, res) => {
   res.json(announcements);
 });
