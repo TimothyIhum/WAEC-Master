@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Lock,
   Unlock,
@@ -74,6 +74,36 @@ export default function ParentDashboard({
     () => paymentRequests[0] || null,
     [paymentRequests],
   );
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setShowBuyParentLinkPin(params.get("parentLinkPage") === "buy");
+  }, []);
+
+  const openPurchasePage = () => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", "guardian");
+    params.set("parentLinkPage", "buy");
+    window.history.pushState(
+      {},
+      "",
+      `${window.location.pathname}?${params.toString()}`,
+    );
+    setShowBuyParentLinkPin(true);
+  };
+
+  const closePurchasePage = () => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", "guardian");
+    params.delete("parentLinkPage");
+    const query = params.toString();
+    window.history.pushState(
+      {},
+      "",
+      query ? `${window.location.pathname}?${query}` : window.location.pathname,
+    );
+    setShowBuyParentLinkPin(false);
+  };
 
   const handleCopyAccount = async () => {
     try {
@@ -244,7 +274,7 @@ export default function ParentDashboard({
             <div className="flex justify-center">
               <button
                 type="button"
-                onClick={() => setShowBuyParentLinkPin(true)}
+                onClick={openPurchasePage}
                 className="py-3 px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2"
               >
                 <CreditCard className="w-4 h-4" /> Buy Parent Link Pin
@@ -254,7 +284,7 @@ export default function ParentDashboard({
             <div className="space-y-5">
               <button
                 type="button"
-                onClick={() => setShowBuyParentLinkPin(false)}
+                onClick={closePurchasePage}
                 className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" /> Back to Parent Link

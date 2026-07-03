@@ -97,7 +97,10 @@ export default function App() {
   });
 
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [activeTab, setActiveTab] = useState<string>("dashboard");
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    return tab || "dashboard";
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showUserDashboard, setShowUserDashboard] = useState(false);
   const [desktopSidebarViewMenuOpen, setDesktopSidebarViewMenuOpen] =
