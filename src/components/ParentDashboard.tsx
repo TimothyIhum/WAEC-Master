@@ -251,6 +251,21 @@ export default function ParentDashboard({
             return;
           }
 
+          // Handle specific payer name mismatch error
+          if (
+            !cancelled &&
+            data.error &&
+            data.error.includes("Payer name mismatch")
+          ) {
+            setErrorMsg(
+              data.error +
+                " Please ensure the name used for payment matches your entry.",
+            );
+            clearPaymentQueryParams();
+            setStatusLoading(false);
+            return;
+          }
+
           if (!cancelled) {
             setPurchaseMsg(
               data.message ||

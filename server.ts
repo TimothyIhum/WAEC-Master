@@ -981,6 +981,21 @@ const PARENT_LINK_PIN_AMOUNT_KOBO = Number(
 const createServerId = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+const normalizeName = (name: string) =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ") // Replace multiple spaces with a single space
+    .split(" ")
+    .sort()
+    .join(" ");
+
+const nameMatches = (expectedName: string, actualName: string) => {
+  const normalizedExpected = normalizeName(expectedName);
+  const normalizedActual = normalizeName(actualName);
+  return normalizedExpected === normalizedActual;
+};
+
 const generateParentPin = (existingPins: Set<string>) => {
   let pin = "";
   do {
@@ -1018,6 +1033,7 @@ async function finalizeVerifiedParentPinPayment({
   reference,
   guardianEmail,
   guardianName,
+  payerPaystackName,
   amountKobo,
   paidAt,
   channel,
@@ -1025,6 +1041,7 @@ async function finalizeVerifiedParentPinPayment({
   reference: string;
   guardianEmail: string;
   guardianName?: string;
+  payerPaystackName?: string; // Add this parameter
   amountKobo: number;
   paidAt?: string | null;
   channel?: string | null;
@@ -1049,6 +1066,18 @@ async function finalizeVerifiedParentPinPayment({
     throw new Error(
       "Unable to determine the guardian email for this verified payment.",
     );
+  }
+
+  // Strict name matching check
+  if (payerPaystackName) {
+    if (!nameMatches(cleanGuardianName, payerPaystackName)) {
+      throw new Error(
+        `Payer name mismatch. Expected '${cleanGuardianName}', but Paystack detected '${payerPaystackName}'.`,
+      );
+    }
+  } else if (!cleanGuardianName) {
+    // If Paystack doesn't provide a name, and we don't have one from the app, then it's an issue.
+    throw new Error("Payer name is required for verification.");
   }
 
   const requiredAmount = Number(
@@ -1380,6 +1409,10 @@ app.get(
         guardianName:
           String(transaction.metadata?.guardianName || "") ||
           String(transaction.customer?.first_name || "").trim(),
+        payerPaystackName:
+          String(transaction.customer?.first_name || "").trim() +
+          " " +
+          String(transaction.customer?.last_name || "").trim(),
         amountKobo: Number(transaction.amount || 0),
         paidAt: transaction.paid_at || null,
         channel: transaction.channel || null,
