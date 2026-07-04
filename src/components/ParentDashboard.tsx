@@ -115,7 +115,7 @@ export default function ParentDashboard({
     const guardianName = purchaseName.trim();
     const guardianEmail = purchaseEmail.trim().toLowerCase();
     if (!guardianName) {
-      setErrorMsg("Enter the guardian full name.");
+      setErrorMsg("Enter the payer full name.");
       return;
     }
     if (!guardianEmail || !guardianEmail.includes("@")) {
@@ -390,7 +390,7 @@ export default function ParentDashboard({
                     Buy Parent Link Pin
                   </h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Enter the guardian full name and email, continue to Paystack
+                    Enter the payer full name and email, continue to Paystack
                     checkout, and the verified Parent PIN will be issued
                     automatically and sent to that email.
                   </p>
@@ -438,7 +438,7 @@ export default function ParentDashboard({
                     <input
                       type="text"
                       required
-                      placeholder="Guardian full name"
+                      placeholder="Payer full name"
                       value={purchaseName}
                       onChange={(e) => setPurchaseName(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
@@ -513,7 +513,9 @@ export default function ParentDashboard({
                   </span>
                 </p>
                 <p>
-                  <span className="font-bold text-slate-700">Guardian:</span>{" "}
+                  <span className="font-bold text-slate-700">
+                    Payer full name:
+                  </span>{" "}
                   {latestRequest.guardianName || latestRequest.payerName}
                 </p>
                 <p>
