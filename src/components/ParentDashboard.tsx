@@ -18,6 +18,7 @@ interface ParentDashboardProps {
 interface ParentPinPaymentRequest {
   id: string;
   guardianEmail: string;
+  guardianName?: string | null;
   payerName: string;
   transferReference: string;
   product: string;
@@ -28,6 +29,8 @@ interface ParentPinPaymentRequest {
   approvedAt?: string | null;
   issuedPin?: string | null;
   amountKobo?: number;
+  pinEmailSentAt?: string | null;
+  pinEmailDeliveryError?: string | null;
 }
 
 export default function ParentDashboard({
@@ -57,6 +60,7 @@ export default function ParentDashboard({
     currentConfig.parentNotes || "",
   );
 
+  const [purchaseName, setPurchaseName] = useState("");
   const [purchaseEmail, setPurchaseEmail] = useState(
     currentConfig.parentEmail || "",
   );
@@ -108,7 +112,12 @@ export default function ParentDashboard({
     setErrorMsg("");
     setPurchaseMsg("");
 
+    const guardianName = purchaseName.trim();
     const guardianEmail = purchaseEmail.trim().toLowerCase();
+    if (!guardianName) {
+      setErrorMsg("Enter the guardian full name.");
+      return;
+    }
     if (!guardianEmail || !guardianEmail.includes("@")) {
       setErrorMsg("Enter a valid guardian email.");
       return;
@@ -121,6 +130,7 @@ export default function ParentDashboard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          guardianName,
           guardianEmail,
           callbackUrl,
         }),
@@ -218,13 +228,22 @@ export default function ParentDashboard({
 
           if (data.verified && data.pin) {
             if (!cancelled) {
+              const emailDeliveryMsg = data.request?.pinEmailSentAt
+                ? ` It has also been sent to ${data.request?.guardianEmail || purchaseEmail}.`
+                : data.request?.pinEmailDeliveryError
+                  ? " Payment was verified, but PIN email delivery is not configured yet on the server."
+                  : "";
+
               setPurchaseMsg(
-                `Payment verified successfully. Your Parent PIN is ${data.pin}.`,
+                `Payment verified successfully. Your Parent PIN is ${data.pin}.${emailDeliveryMsg}`,
               );
               setPinInput(data.pin);
               if (data.request?.guardianEmail) {
                 setParentEmail(data.request.guardianEmail);
                 setPurchaseEmail(data.request.guardianEmail);
+              }
+              if (data.request?.guardianName) {
+                setPurchaseName(data.request.guardianName);
               }
               clearPaymentQueryParams();
               await handleCheckStatus(data.request?.guardianEmail);
@@ -371,9 +390,9 @@ export default function ParentDashboard({
                     Buy Parent Link Pin
                   </h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Enter the guardian email, continue to Paystack checkout, and
-                    your Parent PIN will be issued automatically after live
-                    payment verification.
+                    Enter the guardian full name and email, continue to Paystack
+                    checkout, and the verified Parent PIN will be issued
+                    automatically and sent to that email.
                   </p>
                 </div>
 
@@ -417,6 +436,14 @@ export default function ParentDashboard({
                       Proceed to Paystack Checkout
                     </p>
                     <input
+                      type="text"
+                      required
+                      placeholder="Guardian full name"
+                      value={purchaseName}
+                      onChange={(e) => setPurchaseName(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
+                    />
+                    <input
                       type="email"
                       required
                       placeholder="Guardian email"
@@ -424,6 +451,11 @@ export default function ParentDashboard({
                       onChange={(e) => setPurchaseEmail(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl py-2.5 px-3 text-sm focus:outline-hidden"
                     />
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      The payer bank account is handled inside Paystack
+                      checkout. After successful verification, the Parent PIN is
+                      also sent to this email.
+                    </p>
                     <button
                       type="submit"
                       disabled={submittingPayment}
@@ -481,6 +513,14 @@ export default function ParentDashboard({
                   </span>
                 </p>
                 <p>
+                  <span className="font-bold text-slate-700">Guardian:</span>{" "}
+                  {latestRequest.guardianName || latestRequest.payerName}
+                </p>
+                <p>
+                  <span className="font-bold text-slate-700">Email:</span>{" "}
+                  {latestRequest.guardianEmail}
+                </p>
+                <p>
                   <span className="font-bold text-slate-700">Reference:</span>{" "}
                   {latestRequest.transferReference}
                 </p>
@@ -492,6 +532,17 @@ export default function ParentDashboard({
                     <span className="font-mono font-black text-indigo-700 tracking-widest">
                       {latestRequest.issuedPin}
                     </span>
+                  </p>
+                )}
+                {latestRequest.pinEmailSentAt && (
+                  <p className="text-emerald-700 font-semibold">
+                    PIN email sent successfully.
+                  </p>
+                )}
+                {latestRequest.pinEmailDeliveryError && (
+                  <p className="text-amber-700 font-semibold">
+                    PIN email could not be sent yet. Configure SMTP on the
+                    server to deliver it automatically.
                   </p>
                 )}
               </div>

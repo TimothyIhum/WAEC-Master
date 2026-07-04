@@ -143,11 +143,7 @@ interface VerificationRecord {
 }
 const verificationCodes = new Map<string, VerificationRecord>();
 
-// Real email delivery helper using nodemailer
-const sendVerificationEmail = async (
-  toEmail: string,
-  code: string,
-): Promise<{ success: boolean; error?: string }> => {
+const getMailTransport = () => {
   const host = process.env.SMTP_HOST || "smtp.gmail.com";
   const port = parseInt(process.env.SMTP_PORT || "465");
   const user = process.env.SMTP_USER;
@@ -155,26 +151,23 @@ const sendVerificationEmail = async (
 
   if (!user || !pass) {
     return {
-      success: false,
+      transporter: null,
+      user: null,
       error:
         "SMTP credentials (SMTP_USER and SMTP_PASS) are not set in the .env environment secrets panel",
     };
   }
 
-  try {
-    const isGmail = host.includes("gmail") || user.endsWith("@gmail.com");
-    let transporter;
-
-    if (isGmail) {
-      transporter = nodemailer.createTransport({
+  const isGmail = host.includes("gmail") || user.endsWith("@gmail.com");
+  const transporter = isGmail
+    ? nodemailer.createTransport({
         service: "gmail",
         auth: {
           user,
           pass,
         },
-      });
-    } else {
-      transporter = nodemailer.createTransport({
+      })
+    : nodemailer.createTransport({
         host,
         port,
         secure: port === 465,
@@ -183,8 +176,29 @@ const sendVerificationEmail = async (
           pass,
         },
       });
-    }
 
+  return {
+    transporter,
+    user,
+    error: null,
+  };
+};
+
+// Real email delivery helper using nodemailer
+const sendVerificationEmail = async (
+  toEmail: string,
+  code: string,
+): Promise<{ success: boolean; error?: string }> => {
+  const { transporter, user, error } = getMailTransport();
+
+  if (!transporter || !user) {
+    return {
+      success: false,
+      error: error || "Mail transport is not configured.",
+    };
+  }
+
+  try {
     const fromAddress = process.env.SMTP_FROM || user;
 
     await transporter.sendMail({
@@ -230,6 +244,75 @@ const sendVerificationEmail = async (
     return { success: true };
   } catch (err: any) {
     console.error("Nodemailer send failed:", err);
+    return { success: false, error: err.message };
+  }
+};
+
+const sendParentPinEmail = async ({
+  toEmail,
+  parentName,
+  pin,
+}: {
+  toEmail: string;
+  parentName?: string;
+  pin: string;
+}): Promise<{ success: boolean; error?: string }> => {
+  const { transporter, user, error } = getMailTransport();
+
+  if (!transporter || !user) {
+    return {
+      success: false,
+      error: error || "Mail transport is not configured.",
+    };
+  }
+
+  try {
+    const fromAddress = process.env.SMTP_FROM || user;
+    const greetingName = String(parentName || "Parent/Guardian").trim();
+
+    await transporter.sendMail({
+      from: `"WAEC Master Exam CBT" <${fromAddress}>`,
+      to: toEmail,
+      subject: "[WAEC Master] Your Parent LINK PIN",
+      html: `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 560px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; color: #1e293b; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-block; padding: 12px; background-color: #e0e7ff; color: #4338ca; border-radius: 12px; font-size: 28px; font-weight: bold; line-height: 1;">
+              🔐
+            </div>
+            <h1 style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 12px; margin-bottom: 4px; letter-spacing: -0.025em;">WAEC Master</h1>
+            <p style="font-size: 11px; color: #6366f1; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin: 0;">Parent LINK Purchase</p>
+          </div>
+
+          <p style="font-size: 14.5px; line-height: 1.6; color: #334155; margin-top: 0; margin-bottom: 16px;">
+            Hello ${greetingName},
+          </p>
+          <p style="font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 24px;">
+            Your Parent LINK PIN payment has been verified successfully. Use the PIN below to unlock the Parent/Guardian Safety LINK in WAEC Master.
+          </p>
+
+          <div style="text-align: center; margin-bottom: 28px;">
+            <div style="display: inline-block; padding: 14px 28px; background-color: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 16px; font-size: 32px; font-weight: 900; letter-spacing: 0.15em; color: #312e81; font-family: 'Courier New', Courier, monospace;">
+              ${pin}
+            </div>
+            <p style="font-size: 11px; color: #64748b; font-weight: 700; margin-top: 8px; margin-bottom: 0;">This Parent LINK PIN can only be linked to 2 students.</p>
+          </div>
+
+          <p style="font-size: 13px; line-height: 1.5; color: #64748b; margin-bottom: 24px;">
+            If you did not make this payment, please contact WAEC Master support immediately.
+          </p>
+
+          <hr style="border: 0; border-top: 1px solid #f1f5f9; margin-bottom: 16px;" />
+          <p style="font-size: 10px; text-align: center; color: #94a3b8; margin: 0;">
+            © 2026 WAEC Master CBT Simulator. West African Examination Council Preparation Partner.
+          </p>
+        </div>
+      `,
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("Failed to send parent PIN email:", err);
     return { success: false, error: err.message };
   }
 };
@@ -934,12 +1017,14 @@ async function listParentPins() {
 async function finalizeVerifiedParentPinPayment({
   reference,
   guardianEmail,
+  guardianName,
   amountKobo,
   paidAt,
   channel,
 }: {
   reference: string;
   guardianEmail: string;
+  guardianName?: string;
   amountKobo: number;
   paidAt?: string | null;
   channel?: string | null;
@@ -954,6 +1039,12 @@ async function finalizeVerifiedParentPinPayment({
   const cleanEmail = String(guardianEmail || requestRecord?.guardianEmail || "")
     .trim()
     .toLowerCase();
+  const cleanGuardianName = String(
+    guardianName ||
+      requestRecord?.guardianName ||
+      requestRecord?.payerName ||
+      "",
+  ).trim();
   if (!cleanEmail) {
     throw new Error(
       "Unable to determine the guardian email for this verified payment.",
@@ -979,7 +1070,8 @@ async function finalizeVerifiedParentPinPayment({
   const baseRequestRecord = requestRecord || {
     id: reference,
     guardianEmail: cleanEmail,
-    payerName: cleanEmail,
+    guardianName: cleanGuardianName,
+    payerName: cleanGuardianName || cleanEmail,
     transferReference: reference,
     product: "Parent LINK PIN (2 students)",
     bankName: "Paystack",
@@ -995,6 +1087,9 @@ async function finalizeVerifiedParentPinPayment({
   if (existingPinRecord) {
     const approvedRequest = {
       ...baseRequestRecord,
+      guardianEmail: cleanEmail,
+      guardianName: cleanGuardianName || baseRequestRecord.guardianName || null,
+      payerName: cleanGuardianName || baseRequestRecord.payerName || cleanEmail,
       status: "approved",
       approvedAt: baseRequestRecord.approvedAt || new Date().toISOString(),
       issuedPin: existingPinRecord.pin,
@@ -1043,7 +1138,8 @@ async function finalizeVerifiedParentPinPayment({
   const approvedRequest = {
     ...baseRequestRecord,
     guardianEmail: cleanEmail,
-    payerName: baseRequestRecord.payerName || cleanEmail,
+    guardianName: cleanGuardianName || null,
+    payerName: cleanGuardianName || baseRequestRecord.payerName || cleanEmail,
     status: "approved",
     approvedAt: new Date().toISOString(),
     issuedPin: pin,
@@ -1068,17 +1164,52 @@ async function finalizeVerifiedParentPinPayment({
     console.error("Failed to persist verified Paystack payment:", err);
   }
 
+  const emailResult = await sendParentPinEmail({
+    toEmail: cleanEmail,
+    parentName: cleanGuardianName || undefined,
+    pin,
+  });
+
+  const finalRequest = {
+    ...approvedRequest,
+    pinEmailSentAt: emailResult.success ? new Date().toISOString() : null,
+    pinEmailDeliveryError: emailResult.success
+      ? null
+      : emailResult.error || null,
+  };
+
+  try {
+    await fSetDoc(
+      fDoc(db, PARENT_PIN_PAYMENT_REQUESTS_COLLECTION, reference),
+      finalRequest,
+    );
+  } catch (err) {
+    console.error("Failed to persist parent PIN email delivery state:", err);
+  }
+
+  parentPinPaymentRequests = [
+    finalRequest,
+    ...parentPinPaymentRequests.filter((item) => item.id !== reference),
+  ];
+
   return {
     pin,
-    request: approvedRequest,
+    request: finalRequest,
   };
 }
 
 app.post("/api/parent-pin/payment-request", async (req, res) => {
-  const { guardianEmail, callbackUrl } = req.body || {};
+  const { guardianEmail, guardianName, callbackUrl } = req.body || {};
   const cleanEmail = String(guardianEmail || "")
     .trim()
     .toLowerCase();
+  const cleanGuardianName = String(guardianName || "").trim();
+
+  if (!cleanGuardianName) {
+    return res.status(400).json({
+      error: "Guardian full name is required.",
+    });
+  }
 
   if (!cleanEmail) {
     return res.status(400).json({
@@ -1097,7 +1228,8 @@ app.post("/api/parent-pin/payment-request", async (req, res) => {
   const requestRecord = {
     id: reference,
     guardianEmail: cleanEmail,
-    payerName: cleanEmail,
+    guardianName: cleanGuardianName,
+    payerName: cleanGuardianName,
     transferReference: reference,
     product: "Parent LINK PIN (2 students)",
     bankName: "Paystack",
@@ -1129,6 +1261,7 @@ app.post("/api/parent-pin/payment-request", async (req, res) => {
             product: "Parent LINK PIN (2 students)",
             maxLinks: 2,
             guardianEmail: cleanEmail,
+            guardianName: cleanGuardianName,
           },
         }),
       },
@@ -1244,6 +1377,9 @@ app.get(
         guardianEmail:
           String(transaction.metadata?.guardianEmail || "") ||
           String(transaction.customer?.email || ""),
+        guardianName:
+          String(transaction.metadata?.guardianName || "") ||
+          String(transaction.customer?.first_name || "").trim(),
         amountKobo: Number(transaction.amount || 0),
         paidAt: transaction.paid_at || null,
         channel: transaction.channel || null,
