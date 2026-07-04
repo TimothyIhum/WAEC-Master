@@ -1207,7 +1207,7 @@ app.post("/api/parent-pin/payment-request", async (req, res) => {
 
   if (!cleanGuardianName) {
     return res.status(400).json({
-      error: "Guardian full name is required.",
+      error: "Payer full name is required.",
     });
   }
 
