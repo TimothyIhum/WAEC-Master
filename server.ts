@@ -931,6 +931,149 @@ async function listParentPins() {
   }
 }
 
+async function finalizeVerifiedParentPinPayment({
+  reference,
+  guardianEmail,
+  amountKobo,
+  paidAt,
+  channel,
+}: {
+  reference: string;
+  guardianEmail: string;
+  amountKobo: number;
+  paidAt?: string | null;
+  channel?: string | null;
+}) {
+  const requests = await listParentPinPaymentRequests();
+  const requestRecord = requests.find(
+    (item: any) =>
+      item.id === reference ||
+      String(item.transferReference || "") === reference,
+  );
+
+  const cleanEmail = String(guardianEmail || requestRecord?.guardianEmail || "")
+    .trim()
+    .toLowerCase();
+  if (!cleanEmail) {
+    throw new Error(
+      "Unable to determine the guardian email for this verified payment.",
+    );
+  }
+
+  const requiredAmount = Number(
+    requestRecord?.amountKobo || PARENT_LINK_PIN_AMOUNT_KOBO,
+  );
+  if (Number(amountKobo || 0) < requiredAmount) {
+    throw new Error(
+      "Paid amount is lower than the required Parent LINK PIN amount.",
+    );
+  }
+
+  const allPins = await listParentPins();
+  const existingPinRecord = allPins.find(
+    (item: any) =>
+      String(item.requestId || "") === reference ||
+      String(item.paymentReference || "") === reference,
+  );
+
+  const baseRequestRecord = requestRecord || {
+    id: reference,
+    guardianEmail: cleanEmail,
+    payerName: cleanEmail,
+    transferReference: reference,
+    product: "Parent LINK PIN (2 students)",
+    bankName: "Paystack",
+    accountNumber: "Hosted Checkout",
+    amountKobo: requiredAmount,
+    paymentProvider: "paystack",
+    status: "initialized",
+    createdAt: paidAt || new Date().toISOString(),
+    approvedAt: null,
+    issuedPin: null,
+  };
+
+  if (existingPinRecord) {
+    const approvedRequest = {
+      ...baseRequestRecord,
+      status: "approved",
+      approvedAt: baseRequestRecord.approvedAt || new Date().toISOString(),
+      issuedPin: existingPinRecord.pin,
+      paystackStatus: "success",
+      paidAt: paidAt || baseRequestRecord.paidAt || null,
+      channel: channel || baseRequestRecord.channel || null,
+    };
+
+    parentPinPaymentRequests = [
+      approvedRequest,
+      ...parentPinPaymentRequests.filter((item) => item.id !== reference),
+    ];
+
+    try {
+      await fSetDoc(
+        fDoc(db, PARENT_PIN_PAYMENT_REQUESTS_COLLECTION, reference),
+        approvedRequest,
+      );
+    } catch (err) {
+      console.error(
+        "Failed to persist approved parent PIN payment request:",
+        err,
+      );
+    }
+
+    return {
+      pin: existingPinRecord.pin,
+      request: approvedRequest,
+    };
+  }
+
+  const pin = generateParentPin(
+    new Set(allPins.map((item: any) => String(item.pin))),
+  );
+  const pinRecord = {
+    id: pin,
+    pin,
+    ownerEmail: cleanEmail,
+    linkedStudents: [],
+    maxLinks: 2,
+    purchasedAt: paidAt || new Date().toISOString(),
+    requestId: reference,
+    paymentReference: reference,
+    paymentProvider: "paystack",
+  };
+  const approvedRequest = {
+    ...baseRequestRecord,
+    guardianEmail: cleanEmail,
+    payerName: baseRequestRecord.payerName || cleanEmail,
+    status: "approved",
+    approvedAt: new Date().toISOString(),
+    issuedPin: pin,
+    paystackStatus: "success",
+    paidAt: paidAt || null,
+    channel: channel || null,
+  };
+
+  parentPins = [pinRecord, ...parentPins.filter((item) => item.pin !== pin)];
+  parentPinPaymentRequests = [
+    approvedRequest,
+    ...parentPinPaymentRequests.filter((item) => item.id !== reference),
+  ];
+
+  try {
+    await fSetDoc(fDoc(db, PARENT_PINS_COLLECTION, pin), pinRecord);
+    await fSetDoc(
+      fDoc(db, PARENT_PIN_PAYMENT_REQUESTS_COLLECTION, reference),
+      approvedRequest,
+    );
+  } catch (err) {
+    console.error("Failed to persist verified Paystack payment:", err);
+  }
+
+  return {
+    pin,
+    request: approvedRequest,
+  };
+}
+
 app.post("/api/parent-pin/payment-request", async (req, res) => {
   const { guardianEmail, callbackUrl } = req.body || {};
   const cleanEmail = String(guardianEmail || "")
@@ -1086,11 +1229,6 @@ app.get(
       }
 
       const transaction = verifyData.data;
-      const requests = await listParentPinPaymentRequests();
-      const requestRecord = requests.find((item: any) => item.id === reference);
-      if (!requestRecord) {
-        return res.status(404).json({ error: "Payment request not found." });
-      }
 
       if (transaction.status !== "success") {
         return res.json({
@@ -1101,74 +1239,21 @@ app.get(
         });
       }
 
-      if (
-        Number(transaction.amount || 0) <
-        Number(requestRecord.amountKobo || PARENT_LINK_PIN_AMOUNT_KOBO)
-      ) {
-        return res.status(400).json({
-          error:
-            "Paid amount is lower than the required Parent LINK PIN amount.",
-        });
-      }
-
-      if (requestRecord.issuedPin && requestRecord.status === "approved") {
-        return res.json({
-          success: true,
-          verified: true,
-          pin: requestRecord.issuedPin,
-          request: requestRecord,
-        });
-      }
-
-      const existingPins = await listParentPins();
-      const pin = generateParentPin(
-        new Set(existingPins.map((item: any) => String(item.pin))),
-      );
-      const pinRecord = {
-        id: pin,
-        pin,
-        ownerEmail: requestRecord.guardianEmail,
-        linkedStudents: [],
-        maxLinks: 2,
-        purchasedAt: new Date().toISOString(),
-        requestId: reference,
-        paymentReference: reference,
-        paymentProvider: "paystack",
-      };
-      const approvedRequest = {
-        ...requestRecord,
-        status: "approved",
-        approvedAt: new Date().toISOString(),
-        issuedPin: pin,
-        paystackStatus: transaction.status,
+      const finalizedPayment = await finalizeVerifiedParentPinPayment({
+        reference,
+        guardianEmail:
+          String(transaction.metadata?.guardianEmail || "") ||
+          String(transaction.customer?.email || ""),
+        amountKobo: Number(transaction.amount || 0),
         paidAt: transaction.paid_at || null,
         channel: transaction.channel || null,
-      };
-
-      parentPins = [
-        pinRecord,
-        ...parentPins.filter((item) => item.pin !== pin),
-      ];
-      parentPinPaymentRequests = [
-        approvedRequest,
-        ...parentPinPaymentRequests.filter((item) => item.id !== reference),
-      ];
-
-      try {
-        await fSetDoc(fDoc(db, PARENT_PINS_COLLECTION, pin), pinRecord);
-        await fSetDoc(
-          fDoc(db, PARENT_PIN_PAYMENT_REQUESTS_COLLECTION, reference),
-          approvedRequest,
-        );
-      } catch (err) {
-        console.error("Failed to persist verified Paystack payment:", err);
-      }
+      });
 
       return res.json({
         success: true,
         verified: true,
-        pin,
-        request: approvedRequest,
+        pin: finalizedPayment.pin,
+        request: finalizedPayment.request,
       });
     } catch (err) {
       console.error("Failed to verify live Paystack payment:", err);

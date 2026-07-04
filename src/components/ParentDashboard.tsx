@@ -180,38 +180,92 @@ export default function ParentDashboard({
     const reference = params.get("reference") || params.get("trxref");
     if (!reference) return;
 
+    let cancelled = false;
+
+    const clearPaymentQueryParams = () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("reference");
+      url.searchParams.delete("trxref");
+      url.searchParams.delete("status");
+      const query = url.searchParams.toString();
+      window.history.replaceState(
+        {},
+        "",
+        query ? `${url.pathname}?${query}` : url.pathname,
+      );
+    };
+
+    const sleep = (ms: number) =>
+      new Promise((resolve) => window.setTimeout(resolve, ms));
+
     const verifyPayment = async () => {
       setStatusLoading(true);
       setErrorMsg("");
+
       try {
-        const resp = await fetch(
-          `/api/parent-pin/payment-request/verify/${encodeURIComponent(reference)}`,
-        );
-        const data = await resp.json();
-        if (!resp.ok) {
-          setErrorMsg(data.error || "Failed to verify payment.");
-          return;
-        }
-        if (data.verified && data.pin) {
-          setPurchaseMsg(
-            `Payment verified successfully. Your Parent PIN is ${data.pin}.`,
+        for (let attempt = 1; attempt <= 5; attempt += 1) {
+          const resp = await fetch(
+            `/api/parent-pin/payment-request/verify/${encodeURIComponent(reference)}`,
           );
-          setPinInput(data.pin);
-          if (data.request?.guardianEmail) {
-            setParentEmail(data.request.guardianEmail);
-            setPurchaseEmail(data.request.guardianEmail);
+          const data = await resp.json();
+
+          if (!resp.ok) {
+            if (!cancelled) {
+              setErrorMsg(data.error || "Failed to verify payment.");
+            }
+            return;
           }
-          await handleCheckStatus(data.request?.guardianEmail);
+
+          if (data.verified && data.pin) {
+            if (!cancelled) {
+              setPurchaseMsg(
+                `Payment verified successfully. Your Parent PIN is ${data.pin}.`,
+              );
+              setPinInput(data.pin);
+              if (data.request?.guardianEmail) {
+                setParentEmail(data.request.guardianEmail);
+                setPurchaseEmail(data.request.guardianEmail);
+              }
+              clearPaymentQueryParams();
+              await handleCheckStatus(data.request?.guardianEmail);
+            }
+            return;
+          }
+
+          if (!cancelled) {
+            setPurchaseMsg(
+              data.message ||
+                "Payment is still being confirmed. Checking again...",
+            );
+          }
+
+          if (attempt < 5) {
+            await sleep(2500);
+          }
+        }
+
+        if (!cancelled) {
+          setPurchaseMsg(
+            "Payment has been returned from Paystack, but confirmation is still processing. Click Check Status in a moment.",
+          );
         }
       } catch (err) {
         console.error(err);
-        setErrorMsg("Unable to verify payment right now.");
+        if (!cancelled) {
+          setErrorMsg("Unable to verify payment right now.");
+        }
       } finally {
-        setStatusLoading(false);
+        if (!cancelled) {
+          setStatusLoading(false);
+        }
       }
     };
 
     verifyPayment();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleUnlock = async (e: React.FormEvent) => {
