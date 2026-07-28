@@ -1558,7 +1558,14 @@ Generate challenging WAEC questions. Ensure the output is strictly parseable JSO
 async function extractTextFromDoc(mimeType: string, base64Data: string): Promise<string> {
   try {
     if (mimeType.includes("wordprocessingml") || mimeType.includes("docx") || mimeType.includes("officedocument")) {
-      const zip = new JSZip();
+      let zip: any;
+      if (typeof JSZip === "function") {
+        zip = new (JSZip as any)();
+      } else if (JSZip && typeof (JSZip as any).default === "function") {
+        zip = new ((JSZip as any).default)();
+      } else {
+        zip = new (JSZip as any)();
+      }
       await zip.loadAsync(base64Data, { base64: true });
       const docXml = await zip.file("word/document.xml")?.async("string");
       if (!docXml) return "";
@@ -1770,7 +1777,7 @@ Conduct professional OCR and document extraction and item-segmentation to fulfil
 2. Segment each question separately.
 3. Detect the target Subject being assessed. Sieve keywords to select from this exact list: [Mathematics, English Language, Physics, Chemistry, Biology, Economics, Government, Literature, Geography, CRS, Commerce, Accounting]. If unsure, lean on ${subjectHint || "General Study"}.
 4. Detect the Examination Year of the paper. Sieve titles, page footers, margin prints, or filenames such as ${fileName || "unspecified"}. Look for years (e.g. 2018, 2022, 2024, etc.). If unsure, estimate or output 2024.
-5. For each question on the sheet:
+5. For each question on the sheet (LIMIT to the first 12 questions maximum if the document contains more, to keep response delivery fast and avoid server/gateway timeouts):
    - Identify "question_number" (integer, e.g., 5).
    - Clean "text" of the question itself, fixing OCR spacing bugs.
    - Detect "options" (A, B, C, D) and strip the 'A.', 'B.', 'C.', 'D.' markers for pristine clean display, keeping just the option content text.
@@ -1781,7 +1788,7 @@ Conduct professional OCR and document extraction and item-segmentation to fulfil
    - Assign the narrow syllabus "topic" of the syllabus (e.g., "Calculus", "Stoichiometry", "Optics", "Mechanics", "Macroeconomics", "Grammar").
    - Provide a decimal "confidence" rating out of 100 for this item's structural OCR alignment.
 
-6. Provide an overall confidence rating out of 100 for the entire sheet ("sheetConfidence").
+6. Provide an overall confidence rating out of 100 for the entire sheet ("sheetConfidence"). Do not process or return more than 12 questions.
 
 Return strictly parseable JSON conforming to this schema:
 {
