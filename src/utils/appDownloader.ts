@@ -760,7 +760,7 @@ export function downloadOfflineCbtApp(questionsList: Question[]) {
                 <div class="p-5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-3">
                   <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-white p-3 rounded-xl border border-slate-150">
                     <div>
-                      <span class="text-xs font-bold text-slate-705">Question \${idx + 1} (\${q.topic})</span>
+                      <span class="text-xs font-bold text-slate-700">Question \${idx + 1} (\${q.topic})</span>
                       <p class="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">Real past paper year \${q.examYear || 2021} • Q\${q.questionNumber || (idx + 1)}</p>
                     </div>
                     <span class="px-2.5 py-1 text-xs font-extrabold rounded-full \${isCorrect ? 'bg-emerald-50 text-emerald-800 border border-emerald-150' : 'bg-rose-50 text-rose-800 border border-rose-150'}" style="font-family: 'JetBrains Mono'">

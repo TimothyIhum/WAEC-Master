@@ -97,7 +97,7 @@ export default function UserDashboardModal({ user, onUpdateUser, onClose }: User
           </div>
           <button 
             onClick={onClose}
-            className="p-1.5 hover:bg-slate-100 rounded-full text-slate-450 hover:text-slate-700 transition"
+            className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-700 transition"
           >
             <X className="w-5 h-5" />
           </button>
