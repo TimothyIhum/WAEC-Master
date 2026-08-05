@@ -1569,31 +1569,47 @@ async function extractTextFromDoc(mimeType: string, base64Data: string): Promise
       await zip.loadAsync(base64Data, { base64: true });
       const docXml = await zip.file("word/document.xml")?.async("string");
       if (!docXml) return "";
-      
-      const matches = docXml.matchAll(/<w:t[^>]*>(.*?)<\/w:t>/g);
-      const textParts: string[] = [];
-      for (const match of matches) {
-        textParts.push(match[1]);
+
+      // Walk paragraph-by-paragraph so question numbering and line breaks are preserved.
+      // Each <w:p> becomes a newline; <w:t> runs within it are joined without spaces
+      // unless the run has xml:space="preserve" (handled by keeping the raw text).
+      const paragraphs: string[] = [];
+      const paraMatches = docXml.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g);
+      for (const paraMatch of paraMatches) {
+        const paraXml = paraMatch[0];
+        const runTexts: string[] = [];
+        const runMatches = paraXml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g);
+        for (const runMatch of runMatches) {
+          runTexts.push(runMatch[1]);
+        }
+        const line = runTexts.join("")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'");
+        if (line.trim()) paragraphs.push(line.trim());
       }
-      return textParts.join(" ")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&apos;/g, "'");
+      return paragraphs.join("\n");
     } else if (mimeType.includes("msword") || mimeType.includes("doc")) {
-      // Legacy binary .doc strings extraction
+      // Legacy binary .doc — extract printable ASCII runs, preserve newlines
       const buffer = Buffer.from(base64Data, "base64");
-      let text = "";
+      const lines: string[] = [];
+      let current = "";
       for (let i = 0; i < buffer.length; i++) {
-        const char = buffer[i];
-        if ((char >= 32 && char <= 126) || char === 10 || char === 13 || char === 9) {
-          text += String.fromCharCode(char);
-        } else if (text.length > 0 && !text.endsWith(" ")) {
-          text += " ";
+        const c = buffer[i];
+        if (c === 13 || c === 10) {
+          if (current.trim()) lines.push(current.trim());
+          current = "";
+        } else if ((c >= 32 && c <= 126) || c === 9) {
+          current += String.fromCharCode(c);
+        } else if (current.length > 0 && !current.endsWith(" ")) {
+          current += " ";
         }
       }
-      return text.replace(/\s+/g, " ").trim();
+      if (current.trim()) lines.push(current.trim());
+      // Collapse runs of spaces within each line but keep line separation
+      return lines.map(l => l.replace(/  +/g, " ")).join("\n");
     }
   } catch (err) {
     console.error("Error extracting document text:", err);
@@ -1601,48 +1617,113 @@ async function extractTextFromDoc(mimeType: string, base64Data: string): Promise
   return "";
 }
 
-// Simple clean helper to extract mime type and raw base64 data from standard dataURLs
-async function processInputPart(base64String: string | undefined | null) {
+// Max file size Gemini can reliably handle (8 MB of raw bytes before base64 expansion)
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
+
+// Detect file category from MIME type + optional filename extension
+function resolveFileCategory(
+  mimeType: string,
+  fileName?: string
+): "image" | "pdf" | "docx" | "doc" | "text" | "markdown" | "unknown" {
+  const ext = (fileName || "").split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "md" || ext === "markdown") return "markdown";
+  if (ext === "txt" || mimeType === "text/plain") return "text";
+  if (ext === "pdf" || mimeType === "application/pdf") return "pdf";
+  if (
+    ext === "docx" ||
+    mimeType.includes("wordprocessingml") ||
+    mimeType.includes("officedocument")
+  ) return "docx";
+  if (ext === "doc" || mimeType.includes("msword")) return "doc";
+  if (mimeType.startsWith("image/")) return "image";
+  // Fallback: treat unknown text-like extensions as plain text
+  if (["rtf", "odt", "csv"].includes(ext)) return "text";
+  return "unknown";
+}
+
+// Simple clean helper to extract mime type and raw base64 data from standard dataURLs.
+// Returns either { text } for plain-text content or { inlineData } for binary/image/pdf content.
+async function processInputPart(
+  base64String: string | undefined | null,
+  fileName?: string
+): Promise<{ text: string } | { inlineData: { mimeType: string; data: string } } | null> {
   if (!base64String || typeof base64String !== "string") return null;
+
   const match = base64String.match(/^data:([^;]+);base64,(.*)$/);
-  if (match) {
-    const mimeType = match[1];
-    const data = match[2];
-
-    // Intercept Word files to convert to clean text/plain for Gemini
-    if (
-      mimeType.includes("wordprocessingml") ||
-      mimeType.includes("msword") ||
-      mimeType.includes("officedocument") ||
-      mimeType.includes("doc")
-    ) {
-      console.log(`Intercepted Word file of mime "${mimeType}". Extracting text...`);
-      const extractedText = await extractTextFromDoc(mimeType, data);
-      if (extractedText) {
-        console.log(`Successfully extracted ${extractedText.length} characters from Word file.`);
-        return {
-          inlineData: {
-            mimeType: "text/plain",
-            data: Buffer.from(extractedText).toString("base64")
-          }
-        };
-      }
-    }
-
-    return {
-      inlineData: {
-        mimeType: mimeType,
-        data: data
-      }
-    };
+  if (!match) {
+    // Raw base64 without data-URL prefix — treat as image
+    return { inlineData: { mimeType: "image/png", data: base64String } };
   }
-  // Fallback if raw base64 without prefix is passed
-  return {
-    inlineData: {
-      mimeType: "image/png",
-      data: base64String
+
+  const mimeType = match[1];
+  const data = match[2];
+
+  // File size guard — reject oversized payloads before sending to Gemini
+  const rawBytes = Math.ceil((data.length * 3) / 4);
+  if (rawBytes > MAX_FILE_BYTES) {
+    throw new Error(
+      `File is too large (${(rawBytes / 1024 / 1024).toFixed(1)} MB). ` +
+      `Maximum supported size is 8 MB. Please split the document into smaller sections.`
+    );
+  }
+
+  const category = resolveFileCategory(mimeType, fileName);
+  console.log(`processInputPart: file="${fileName}", mime="${mimeType}", category="${category}", size=${(rawBytes / 1024).toFixed(0)} KB`);
+
+  // --- Plain text files (.txt, .rtf, .odt, .csv) ---
+  if (category === "text") {
+    const decoded = Buffer.from(data, "base64").toString("utf8");
+    console.log(`Decoded plain-text file: ${decoded.length} characters.`);
+    return { text: decoded };
+  }
+
+  // --- Markdown files (.md) ---
+  if (category === "markdown") {
+    const decoded = Buffer.from(data, "base64").toString("utf8");
+    // Strip markdown syntax so Gemini sees clean question text
+    const stripped = decoded
+      .replace(/^#{1,6}\s+/gm, "")       // headings
+      .replace(/\*\*([^*]+)\*\*/g, "$1") // bold
+      .replace(/\*([^*]+)\*/g, "$1")     // italic
+      .replace(/`{1,3}[^`]*`{1,3}/g, "") // inline code / code blocks
+      .replace(/^[-*+]\s+/gm, "")        // unordered list bullets
+      .replace(/^\d+\.\s+/gm, "")        // ordered list numbers (keep content)
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // links → label only
+      .replace(/!\[[^\]]*\]\([^)]+\)/g, "")    // images → remove
+      .replace(/^>+\s*/gm, "")           // blockquotes
+      .replace(/\r\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    console.log(`Decoded and stripped markdown file: ${stripped.length} characters.`);
+    return { text: stripped };
+  }
+
+  // --- Word .docx files ---
+  if (category === "docx") {
+    console.log(`Intercepted .docx file. Extracting structured text...`);
+    const extractedText = await extractTextFromDoc(mimeType, data);
+    if (extractedText && extractedText.trim().length > 20) {
+      console.log(`Successfully extracted ${extractedText.length} characters from .docx.`);
+      return { text: extractedText };
     }
-  };
+    console.warn(".docx extraction yielded no usable text; falling back to inlineData.");
+  }
+
+  // --- Legacy binary .doc files ---
+  if (category === "doc") {
+    console.log(`Intercepted legacy .doc file. Extracting ASCII text...`);
+    const extractedText = await extractTextFromDoc(mimeType, data);
+    if (extractedText && extractedText.trim().length > 20) {
+      console.log(`Successfully extracted ${extractedText.length} characters from .doc.`);
+      return { text: extractedText };
+    }
+    console.warn(".doc extraction yielded no usable text; falling back to inlineData.");
+  }
+
+  // --- PDF and images — pass as inlineData ---
+  // Gemini natively supports image/* and application/pdf as inlineData
+  const safeMime = category === "pdf" ? "application/pdf" : mimeType;
+  return { inlineData: { mimeType: safeMime, data } };
 }
 
 // INTELLIGENT OCR QUESTION EXTRACTION ROUTE
@@ -1757,11 +1838,11 @@ app.post("/api/gemini/extract-questions", createRateLimiterMiddleware("ocr", 30)
     // Support single image/document or multiple images/documents array asynchronously
     if (images && Array.isArray(images)) {
       for (const imgBase64 of images) {
-        const parsed = await processInputPart(imgBase64);
+        const parsed = await processInputPart(imgBase64, fileName);
         if (parsed) userParts.push(parsed);
       }
     } else if (image) {
-      const parsed = await processInputPart(image);
+      const parsed = await processInputPart(image, fileName);
       if (parsed) userParts.push(parsed);
     }
 
