@@ -1,9 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Play, Timer, Award, CheckCircle, XCircle, Volume2, HelpCircle, 
-  Sparkles, Download, Check, RefreshCw, Flame, ArrowRight, ArrowLeft, Heart,
-  LogOut, AlertTriangle
-} from 'lucide-react';
+import { Play, Timer, Award, CircleCheck as CheckCircle, Circle as XCircle, Volume2, Circle as HelpCircle, Sparkles, Download, Check, RefreshCw, Flame, ArrowRight, ArrowLeft, Heart, LogOut, TriangleAlert as AlertTriangle } from 'lucide-react';
 import { Question } from '../types';
 import { SAMPLE_QUESTIONS, SUBJECTS_LIST, TOPICS_BY_SUBJECT } from '../data/questions';
 import { getCbtSimulationQuestions } from '../data/questionsGenerator';
@@ -392,7 +388,7 @@ export default function CbtSimulator({
                 3. Choose Examination Year
               </label>
               <div className="flex flex-wrap gap-2">
-                {['all', 2023, 2022, 2021, 2020, 2019, 2018].map((yr) => {
+                {['all', 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018].map((yr) => {
                   const isSelected = selectedYear === yr;
                   return (
                     <button

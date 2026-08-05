@@ -1,8 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { 
-  Sparkles, Upload, FileText, CheckCircle, AlertTriangle, 
-  Trash2, Edit3, Check, RefreshCw, Layers, FileCode, CheckSquare, XCircle
-} from 'lucide-react';
+import { Sparkles, Upload, FileText, CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Trash2, CreditCard as Edit3, Check, RefreshCw, Layers, FileCode, SquareCheck as CheckSquare, Circle as XCircle } from 'lucide-react';
 import { Question } from '../types';
 import { SUBJECTS_LIST } from '../data/questions';
 
@@ -49,7 +46,7 @@ export default function OcrExtractorTab({
   subjectsList
 }: OcrExtractorTabProps) {
   const [ocrSubjectHint, setOcrSubjectHint] = useState('Physics');
-  const [ocrYearHint, setOcrYearHint] = useState<string>('2023');
+  const [ocrYearHint, setOcrYearHint] = useState<string>('2025');
   const [ocrExamNameHint, setOcrExamNameHint] = useState<'WAEC' | 'JAMB'>('WAEC');
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgressLog, setOcrProgressLog] = useState('');
@@ -131,52 +128,33 @@ export default function OcrExtractorTab({
     }
   };
 
-  // Extension-based type label (browsers often report wrong MIME for .md, .docx etc.)
-  const getFileTypeLabel = (file: File): string => {
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-    const labels: Record<string, string> = {
-      pdf: 'PDF Document',
-      docx: 'Word Document (.docx)',
-      doc: 'Word Document (.doc)',
-      txt: 'Text File (.txt)',
-      md: 'Markdown File (.md)',
-      markdown: 'Markdown File (.md)',
-      rtf: 'Rich Text (.rtf)',
-      odt: 'OpenDocument (.odt)'
-    };
-    if (labels[ext]) return labels[ext];
-    if (file.type.startsWith('image/')) return `Image (${file.type})`;
-    return `File (.${ext || '?'})`;
-  };
-
-  const MAX_CLIENT_BYTES = 8 * 1024 * 1024; // 8 MB — mirrors server guard
-
   const addFilesToQueue = (files: File[]) => {
     addLog(`Queue intake triggered for ${files.length} file(s).`);
-
     const validFiles = files.filter(file => {
       const ext = file.name.split('.').pop()?.toLowerCase();
-
       if (ext === 'zip' || ext === 'rar') {
         addLog(`File "${file.name}" rejected: ZIP archives are not supported.`);
-        alert(`ZIP and RAR files are not supported. Please upload Word documents (.doc, .docx), text files, PDFs, or images directly!`);
+        alert(`ZIP and RAR files are not supported. Please upload Word documents (.doc, .docx) or text files directly!`);
         return false;
       }
-
-      if (file.size > MAX_CLIENT_BYTES) {
-        addLog(`File "${file.name}" rejected: ${formatBytes(file.size)} exceeds the 8 MB limit.`);
-        alert(`"${file.name}" is ${formatBytes(file.size)} which exceeds the 8 MB limit. Please split the document into smaller sections and try again.`);
-        return false;
-      }
-
       return true;
     });
 
     if (validFiles.length === 0) return;
 
     const newQueued: QueuedFile[] = validFiles.map(file => {
-      const typeLabel = getFileTypeLabel(file);
+      // Check base type
+      let typeLabel = 'Image';
+      const nameLower = file.name.toLowerCase();
+      if (nameLower.endsWith('.pdf')) typeLabel = 'PDF Document';
+      else if (nameLower.endsWith('.docx')) typeLabel = 'Word Document (.docx)';
+      else if (nameLower.endsWith('.doc')) typeLabel = 'Word Document (.doc)';
+      else if (nameLower.endsWith('.txt')) typeLabel = 'Text File (.txt)';
+      else if (nameLower.endsWith('.rtf')) typeLabel = 'Rich Text (.rtf)';
+      else if (nameLower.endsWith('.odt')) typeLabel = 'OpenDocument (.odt)';
+
       const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+      
       addLog(`File loaded: Name="${file.name}", Size=${formatBytes(file.size)}, MIME="${file.type}", DetectedType=${typeLabel}`);
 
       return {
@@ -242,42 +220,22 @@ export default function OcrExtractorTab({
         let base64Img = '';
         if (fileItem.rawFile) {
           try {
-            addLog(`Converting "${fileItem.name}" (${formatBytes(fileItem.rawFile.size)}) to base64 data URL...`);
-
-            // For .md files the browser may report an empty or wrong MIME type.
-            // Force text/plain so the server can decode it correctly.
-            const ext = fileItem.name.split('.').pop()?.toLowerCase() ?? '';
-            const isMarkdown = ext === 'md' || ext === 'markdown';
-            const isPlainText = ext === 'txt';
-
-            if (isMarkdown || isPlainText) {
-              // Read as text then manually build a data URL with the right MIME
-              const textContent = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = () => reject(reader.error);
-                reader.readAsText(fileItem.rawFile!, 'utf-8');
-              });
-              const mime = isMarkdown ? 'text/markdown' : 'text/plain';
-              const b64 = btoa(unescape(encodeURIComponent(textContent)));
-              base64Img = `data:${mime};base64,${b64}`;
-              addLog(`Text file read directly: ${textContent.length} characters, encoded as ${mime}.`);
-            } else {
-              base64Img = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = () => reject(reader.error);
-                reader.readAsDataURL(fileItem.rawFile!);
-              });
-              addLog(`Base64 data URL generated (${Math.round(base64Img.length / 1024)} KB).`);
-            }
+            addLog(`Converting raw file "${fileItem.name}" of size ${formatBytes(fileItem.rawFile.size)} into base64 payload...`);
+            base64Img = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => reject(reader.error);
+              reader.readAsDataURL(fileItem.rawFile!);
+            });
+            addLog(`Base64 generated successfully (${Math.round(base64Img.length / 1024)} KB).`);
           } catch (readErr: any) {
-            addLog(`[WARNING] Failed to read file, will use fallback. Error: ${readErr.message}`);
-            console.error('Failed to read file:', readErr);
+            addLog(`[WARNING] Failed to read file as data URL, falling back. Error: ${readErr.message}`);
+            console.error('Failed to read file as data URL, falling back.', readErr);
           }
         }
 
         if (!base64Img) {
+          // Let's pack a mock/simulated base64 value
           addLog("Using fallback embedded minimal base64 marker.");
           base64Img = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
         }
@@ -818,7 +776,7 @@ export default function OcrExtractorTab({
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
-                accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,.md,.markdown,application/rtf,application/vnd.oasis.opendocument.text"
+                accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.oasis.opendocument.text"
                 multiple
                 className="hidden"
               />
@@ -826,7 +784,7 @@ export default function OcrExtractorTab({
               <span className={`font-bold block text-[11px] transition ${isDragging ? 'text-indigo-700' : 'text-slate-700 group-hover:text-indigo-700'}`}>
                 {isDragging ? 'Drop Your Files Here!' : 'Click or Drag Files Here'}
               </span>
-              <p className="text-[9px] text-slate-400 mt-1">Supports images, PDFs, Word (.docx/.doc), text (.txt), and Markdown (.md) — max 8 MB</p>
+              <p className="text-[9px] text-slate-400 mt-1">Supports screenshots, photos, PDFs, Word docs & text files</p>
             </div>
 
             {/* Direct Word / Text Document Import */}
@@ -838,13 +796,13 @@ export default function OcrExtractorTab({
                 type="file"
                 ref={docInputRef}
                 onChange={handleFileChange}
-                accept="application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,.md,.markdown,application/rtf,application/vnd.oasis.opendocument.text"
+                accept="application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/rtf,application/vnd.oasis.opendocument.text"
                 className="hidden"
               />
               <FileText className="w-5 h-5 text-slate-400 group-hover:text-amber-500 transition" />
               <div>
                 <span className="font-bold text-slate-700 block text-[10px] text-left group-hover:text-amber-600">Import Word & Text Documents</span>
-                <p className="text-[9px] text-slate-400 text-left leading-none mt-0.5">Extract from Word (.doc, .docx), plain text (.txt), and Markdown (.md) files</p>
+                <p className="text-[9px] text-slate-400 text-left leading-none mt-0.5">Extract exam questions from Word (.doc, .docx) and text files</p>
               </div>
             </div>
           </div>
@@ -1260,6 +1218,42 @@ export default function OcrExtractorTab({
                                   type="button"
                                   onClick={() => discardExtractedQuestion(ocrQ.id)}
                                   className="p-1 px-2.5 border border-slate-150 hover:bg-red-50 hover:text-red-600 hover:border-red-100 text-slate-450 rounded-lg transition duration-150 cursor-pointer text-[10px] font-bold"
+                                >
+                                  Discard
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingQuestionId(ocrQ.id);
+                                  }}
+                                  className="p-1 px-2.5 border border-slate-200.5 hover:bg-slate-50 text-slate-700 rounded-lg transition duration-150 cursor-pointer text-[10px] font-bold flex items-center gap-1"
+                                >
+                                  <Edit3 className="w-3 h-3" /> Fix Info
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => approveAndCommitQuestion(ocrQ)}
+                                  className="p-1 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg shadow-xs transition duration-150 cursor-pointer text-[10px] flex items-center gap-1"
+                                >
+                                  <Check className="w-3 h-3" /> Approve Question
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+100 text-slate-450 rounded-lg transition duration-150 cursor-pointer text-[10px] font-bold"
                                 >
                                   Discard
                                 </button>

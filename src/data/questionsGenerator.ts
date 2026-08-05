@@ -508,7 +508,7 @@ export function getCbtSimulationQuestions(
 
     for (let i = 0; i < needed; i++) {
       const qNum = startNum + i;
-      const activeYear = year === 'all' ? ([2018, 2019, 2020, 2021, 2022, 2023][i % 6]) : year;
+      const activeYear = year === 'all' ? ([2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025][i % 8]) : year;
       const q = generateOneQuestion(
         subject,
         activeYear,
