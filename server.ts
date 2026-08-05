@@ -1726,6 +1726,83 @@ async function processInputPart(
   return { inlineData: { mimeType: safeMime, data } };
 }
 
+// Split a plain-text document into chunks of at most `chunkSize` questions.
+// Splits on lines that look like question numbers: "1.", "1)", "Q1", "Question 1", etc.
+function splitTextIntoQuestionChunks(text: string, chunkSize: number): string[] {
+  const lines = text.split("\n");
+  const questionBoundaryRe = /^\s*(Q(?:uestion)?\s*\d+|\d{1,3}[.)\s])/i;
+
+  // Collect the line-index of every question boundary
+  const boundaryIndices: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (questionBoundaryRe.test(lines[i])) {
+      boundaryIndices.push(i);
+    }
+  }
+
+  // If we can't find any boundaries, return the whole text as one chunk
+  if (boundaryIndices.length === 0) return [text];
+
+  // Group boundary indices into chunks of `chunkSize`
+  const chunks: string[] = [];
+  for (let i = 0; i < boundaryIndices.length; i += chunkSize) {
+    const startLine = boundaryIndices[i];
+    const endLine =
+      i + chunkSize < boundaryIndices.length
+        ? boundaryIndices[i + chunkSize]
+        : lines.length;
+    chunks.push(lines.slice(startLine, endLine).join("\n"));
+  }
+  return chunks;
+}
+
+// Build the Gemini OCR prompt for a single chunk/page.
+// `totalExpected` tells the model how many questions are in this chunk so it
+// doesn't stop early.
+function buildOcrPrompt(subjectHint: string, fileName: string, totalExpected: number): string {
+  return `You are a Senior AI OCR Engineer, Education Technology Specialist, and WAEC Exam Content Specialist.
+Read and analyze the attached exam paper content (image, PDF page, or extracted text chunk).
+Conduct professional OCR and document extraction to fulfill these objectives:
+
+1. Perform optical character recognition. CORRECT typos, broken spacing, or run-on words. Keep mathematical notation simple and textual (e.g., x^2, H2O, log_10 — no LaTeX).
+2. Segment EVERY question in the content. Do NOT stop early. Extract ALL ${totalExpected} questions present.
+3. Detect the target Subject. Choose from: [Mathematics, English Language, Physics, Chemistry, Biology, Economics, Government, Literature, Geography, CRS, Commerce, Accounting]. If unsure, use "${subjectHint || "General Study"}".
+4. Detect the Examination Year from titles, footers, or the filename "${fileName || "unspecified"}". Default to 2024 if not found.
+5. For EACH question:
+   - "question_number": the original number on the paper (integer).
+   - "text": the cleaned question prompt.
+   - "options": exactly 4 answer choices, stripped of A./B./C./D. prefixes.
+   - "correctAnswer": index string "0"–"3" for the correct option.
+   - "explanation": step-by-step WAEC-syllabus explanation.
+   - "hint": a brief study hint.
+   - "difficulty": "Easy", "Medium", or "Hard".
+   - "topic": narrow syllabus topic (e.g. "Calculus", "Stoichiometry").
+   - "confidence": OCR confidence 0–100.
+
+6. "sheetConfidence": overall confidence for this chunk (0–100).
+
+Return ONLY valid JSON — no markdown fences, no extra text:
+{
+  "sheetConfidence": number,
+  "subject": string,
+  "year": number,
+  "questions": [
+    {
+      "question_number": number,
+      "text": string,
+      "type": "mcq",
+      "options": [string, string, string, string],
+      "correctAnswer": string,
+      "explanation": string,
+      "hint": string,
+      "difficulty": "Easy" | "Medium" | "Hard",
+      "topic": string,
+      "confidence": number
+    }
+  ]
+}`;
+}
+
 // INTELLIGENT OCR QUESTION EXTRACTION ROUTE
 app.post("/api/gemini/extract-questions", createRateLimiterMiddleware("ocr", 30), async (req, res) => {
   const { image, images, fileName, subjectHint } = req.body;
@@ -1832,131 +1909,141 @@ app.post("/api/gemini/extract-questions", createRateLimiterMiddleware("ocr", 30)
     });
   }
 
-  try {
-    const userParts: any[] = [];
-    
-    // Support single image/document or multiple images/documents array asynchronously
-    if (images && Array.isArray(images)) {
-      for (const imgBase64 of images) {
-        const parsed = await processInputPart(imgBase64, fileName);
-        if (parsed) userParts.push(parsed);
-      }
-    } else if (image) {
-      const parsed = await processInputPart(image, fileName);
-      if (parsed) userParts.push(parsed);
-    }
-
-    if (userParts.length === 0) {
-      return res.status(400).json({ error: "No valid image or PDF payload provided for extraction." });
-    }
-
-    const ocrInstructionPrompt = `You are a Senior AI OCR Engineer, Education Technology Specialist, and WAEC Exam Content Specialist.
-Read and analyze the attached high-resolution exam paper image / PDF document / scanned photo / past questions sheet.
-Conduct professional OCR and document extraction and item-segmentation to fulfill these objectives:
-
-1. Perform optical character recognition. CORRECT typos, broken spacing, or run-on words (e.g. change "Whatistheunitofforce?" to "What is the unit of force?"). Keep mathematical indices simple and textual (e.g., use x^2, H2O, log_10, no raw latex matrices).
-2. Segment each question separately.
-3. Detect the target Subject being assessed. Sieve keywords to select from this exact list: [Mathematics, English Language, Physics, Chemistry, Biology, Economics, Government, Literature, Geography, CRS, Commerce, Accounting]. If unsure, lean on ${subjectHint || "General Study"}.
-4. Detect the Examination Year of the paper. Sieve titles, page footers, margin prints, or filenames such as ${fileName || "unspecified"}. Look for years (e.g. 2018, 2022, 2024, etc.). If unsure, estimate or output 2024.
-5. For each question on the sheet (LIMIT to the first 12 questions maximum if the document contains more, to keep response delivery fast and avoid server/gateway timeouts):
-   - Identify "question_number" (integer, e.g., 5).
-   - Clean "text" of the question itself, fixing OCR spacing bugs.
-   - Detect "options" (A, B, C, D) and strip the 'A.', 'B.', 'C.', 'D.' markers for pristine clean display, keeping just the option content text.
-   - Detect if there are marked/circled/highlighted answers. Otherwise, compute the correct option and set "correctAnswer" index ("0", "1", "2", "3").
-   - Synthesize a comprehensive step-by-step WAEC syllabus-compliant academic "explanation" of why that option is correct.
-   - Craft a brief student "hint".
-   - Assign "difficulty" as "Easy", "Medium", or "Hard".
-   - Assign the narrow syllabus "topic" of the syllabus (e.g., "Calculus", "Stoichiometry", "Optics", "Mechanics", "Macroeconomics", "Grammar").
-   - Provide a decimal "confidence" rating out of 100 for this item's structural OCR alignment.
-
-6. Provide an overall confidence rating out of 100 for the entire sheet ("sheetConfidence"). Do not process or return more than 12 questions.
-
-Return strictly parseable JSON conforming to this schema:
-{
-  "sheetConfidence": number,
-  "subject": string,
-  "year": number,
-  "questions": [
-    {
-      "question_number": number,
-      "text": string,
-      "type": "mcq",
-      "options": [string, string, string, string],
-      "correctAnswer": string,
-      "explanation": string,
-      "hint": string,
-      "difficulty": "Easy" | "Medium" | "Hard",
-      "topic": string,
-      "confidence": number
-    }
-  ]
-}
-
-Ensure the response contains only the valid parseable JSON. Do not write markdown wrappers like \`\`\`json unless requested by the platform, but returning the raw json directly is optimal.`;
-
-    userParts.push({ text: ocrInstructionPrompt });
-
-    const response = await currentClient.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: { parts: userParts },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
+  // Shared Gemini response schema for structured JSON output
+  const ocrResponseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      sheetConfidence: { type: Type.NUMBER },
+      subject: { type: Type.STRING },
+      year: { type: Type.NUMBER },
+      questions: {
+        type: Type.ARRAY,
+        items: {
           type: Type.OBJECT,
           properties: {
-            sheetConfidence: { type: Type.NUMBER },
-            subject: { type: Type.STRING },
-            year: { type: Type.NUMBER },
-            questions: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  question_number: { type: Type.NUMBER },
-                  text: { type: Type.STRING },
-                  type: { type: Type.STRING },
-                  options: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                  },
-                  correctAnswer: { type: Type.STRING },
-                  explanation: { type: Type.STRING },
-                  hint: { type: Type.STRING },
-                  difficulty: { type: Type.STRING },
-                  topic: { type: Type.STRING },
-                  confidence: { type: Type.NUMBER }
-                },
-                required: ["question_number", "text", "type", "options", "correctAnswer", "explanation", "hint", "difficulty", "topic", "confidence"]
-              }
-            }
+            question_number: { type: Type.NUMBER },
+            text: { type: Type.STRING },
+            type: { type: Type.STRING },
+            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+            correctAnswer: { type: Type.STRING },
+            explanation: { type: Type.STRING },
+            hint: { type: Type.STRING },
+            difficulty: { type: Type.STRING },
+            topic: { type: Type.STRING },
+            confidence: { type: Type.NUMBER }
           },
-          required: ["sheetConfidence", "subject", "year", "questions"]
+          required: ["question_number", "text", "type", "options", "correctAnswer", "explanation", "hint", "difficulty", "topic", "confidence"]
         }
       }
+    },
+    required: ["sheetConfidence", "subject", "year", "questions"]
+  };
+
+  // Helper: call Gemini once with a set of parts and return parsed questions array
+  const callGeminiChunk = async (parts: any[]): Promise<any[]> => {
+    const response = await currentClient!.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: { parts },
+      config: { responseMimeType: "application/json", responseSchema: ocrResponseSchema }
     });
+    const raw = (response.text || "").trim();
+    const parsed = JSON.parse(raw);
+    return parsed.questions || [];
+  };
 
-    let cleanBody = "";
-    try {
-      const text = response.text || "";
-      cleanBody = text.trim();
-      const resultObj = JSON.parse(cleanBody);
-
-      return res.json({
-        sheetConfidence: resultObj.sheetConfidence || 90,
-        subject: resultObj.subject || "Physics",
-        year: resultObj.year || 2024,
-        questions: resultObj.questions || []
-      });
-    } catch (parseError: any) {
-      console.error("Failed to parse Gemini OCR response:", parseError, "Response was:", response.text);
-      const logMsg = `[PARSE ERROR - ${new Date().toISOString()}] File: ${fileName || "unknown"}\nError: ${parseError.message}\nStack: ${parseError.stack}\nRaw Response: ${response.text}\n-----------------------\n`;
-      fs.appendFileSync(path.join(process.cwd(), "error_logs.txt"), logMsg, "utf8");
-      return res.status(500).json({
-        error: "Failed to parse structured JSON from AI OCR model. Please try a cleaner past paper scan.",
-        details: parseError.message,
-        rawResponse: response.text ? (response.text.substring(0, 300) + "...") : ""
-      });
+  try {
+    // --- Step 1: resolve all input parts ---
+    const rawParts: any[] = [];
+    if (images && Array.isArray(images)) {
+      for (const imgBase64 of images) {
+        const p = await processInputPart(imgBase64, fileName);
+        if (p) rawParts.push(p);
+      }
+    } else if (image) {
+      const p = await processInputPart(image, fileName);
+      if (p) rawParts.push(p);
     }
+
+    if (rawParts.length === 0) {
+      return res.status(400).json({ error: "No valid file payload provided for extraction." });
+    }
+
+    // --- Step 2: decide strategy based on whether content is text or binary ---
+    const isTextContent = rawParts.every(p => "text" in p);
+    const CHUNK_SIZE = 20; // questions per Gemini call
+
+    let allQuestions: any[] = [];
+    let detectedSubject = subjectHint || "Physics";
+    let detectedYear = 2024;
+
+    if (isTextContent) {
+      // Text path: split into chunks of CHUNK_SIZE questions and call Gemini in parallel
+      const fullText = rawParts.map(p => (p as any).text).join("\n\n");
+      const chunks = splitTextIntoQuestionChunks(fullText, CHUNK_SIZE);
+      console.log(`Text document split into ${chunks.length} chunk(s) of up to ${CHUNK_SIZE} questions each.`);
+
+      const chunkPromises = chunks.map((chunkText, idx) => {
+        const prompt = buildOcrPrompt(subjectHint, fileName, CHUNK_SIZE);
+        const parts = [{ text: chunkText }, { text: prompt }];
+        console.log(`Dispatching chunk ${idx + 1}/${chunks.length} to Gemini...`);
+        return callGeminiChunk(parts).catch(err => {
+          console.error(`Chunk ${idx + 1} failed:`, err.message);
+          return [] as any[];
+        });
+      });
+
+      const chunkResults = await Promise.all(chunkPromises);
+      allQuestions = chunkResults.flat();
+
+      // Try to detect subject/year from the first chunk's full response
+      if (chunks.length > 0) {
+        try {
+          const firstResponse = await currentClient!.models.generateContent({
+            model: "gemini-2.0-flash",
+            contents: { parts: [{ text: chunks[0] }, { text: buildOcrPrompt(subjectHint, fileName, CHUNK_SIZE) }] },
+            config: { responseMimeType: "application/json", responseSchema: ocrResponseSchema }
+          });
+          const firstParsed = JSON.parse((firstResponse.text || "").trim());
+          detectedSubject = firstParsed.subject || subjectHint || "Physics";
+          detectedYear = firstParsed.year || 2024;
+        } catch (_) { /* keep defaults */ }
+      }
+    } else {
+      // Binary path (PDF / images): send all parts in one call, no artificial limit
+      const prompt = buildOcrPrompt(subjectHint, fileName, 100);
+      const parts = [...rawParts, { text: prompt }];
+      console.log(`Binary file: sending ${rawParts.length} part(s) to Gemini in a single call.`);
+
+      const response = await currentClient!.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: { parts },
+        config: { responseMimeType: "application/json", responseSchema: ocrResponseSchema }
+      });
+      const raw = (response.text || "").trim();
+      const parsed = JSON.parse(raw);
+      allQuestions = parsed.questions || [];
+      detectedSubject = parsed.subject || subjectHint || "Physics";
+      detectedYear = parsed.year || 2024;
+    }
+
+    // --- Step 3: deduplicate by question_number and re-number sequentially ---
+    const seen = new Set<number>();
+    const deduped = allQuestions.filter(q => {
+      if (seen.has(q.question_number)) return false;
+      seen.add(q.question_number);
+      return true;
+    });
+    deduped.sort((a, b) => a.question_number - b.question_number);
+
+    console.log(`Extraction complete: ${deduped.length} unique questions from "${fileName}".`);
+
+    return res.json({
+      sheetConfidence: 95,
+      subject: detectedSubject,
+      year: detectedYear,
+      questions: deduped,
+      totalChunks: isTextContent ? Math.ceil(deduped.length / CHUNK_SIZE) : 1
+    });
 
   } catch (err: any) {
     console.error("Gemini OCR Question Extraction failed:", err);

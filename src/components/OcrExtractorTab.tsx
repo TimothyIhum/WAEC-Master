@@ -199,10 +199,10 @@ export default function OcrExtractorTab({
 
       // Simulate step-by-step progress bars & logs
       const steps = [
-        { progress: 25, log: 'Analyzing layout segmentation & column structures...' },
-        { progress: 45, log: 'Applying optical character recognition (OCR) and correcting scan artifacts...' },
-        { progress: 70, log: 'Running NLP parser to segment questions, indices, and choices...' },
-        { progress: 90, log: 'Generating syllabus explanation mapping and difficulty scoring...' }
+        { progress: 20, log: 'Parsing document structure and detecting question boundaries...' },
+        { progress: 40, log: 'Splitting content into extraction chunks...' },
+        { progress: 60, log: 'Running parallel AI extraction on all chunks...' },
+        { progress: 80, log: 'Merging results, deduplicating and sorting questions...' }
       ];
 
       for (const step of steps) {
@@ -266,7 +266,7 @@ export default function OcrExtractorTab({
         }
 
         const data = await resp.json();
-        addLog(`JSON Response received successfully from server.`);
+        addLog(`JSON Response received. Total questions extracted: ${data.questions?.length ?? 0} (chunks processed: ${data.totalChunks ?? 1}).`);
         
         // Match with duplicate database registry
         const parsedQs: ParsedOcrQuestion[] = (data.questions || []).map((q: any, index: number) => {
@@ -1218,42 +1218,6 @@ export default function OcrExtractorTab({
                                   type="button"
                                   onClick={() => discardExtractedQuestion(ocrQ.id)}
                                   className="p-1 px-2.5 border border-slate-150 hover:bg-red-50 hover:text-red-600 hover:border-red-100 text-slate-450 rounded-lg transition duration-150 cursor-pointer text-[10px] font-bold"
-                                >
-                                  Discard
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingQuestionId(ocrQ.id);
-                                  }}
-                                  className="p-1 px-2.5 border border-slate-200.5 hover:bg-slate-50 text-slate-700 rounded-lg transition duration-150 cursor-pointer text-[10px] font-bold flex items-center gap-1"
-                                >
-                                  <Edit3 className="w-3 h-3" /> Fix Info
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => approveAndCommitQuestion(ocrQ)}
-                                  className="p-1 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg shadow-xs transition duration-150 cursor-pointer text-[10px] flex items-center gap-1"
-                                >
-                                  <Check className="w-3 h-3" /> Approve Question
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-100 text-slate-450 rounded-lg transition duration-150 cursor-pointer text-[10px] font-bold"
                                 >
                                   Discard
                                 </button>
