@@ -1939,16 +1939,23 @@ app.post("/api/gemini/extract-questions", createRateLimiterMiddleware("ocr", 30)
     required: ["sheetConfidence", "subject", "year", "questions"]
   };
 
-  // Helper: call Gemini once with a set of parts and return parsed questions array
-  const callGeminiChunk = async (parts: any[]): Promise<any[]> => {
-    const response = await currentClient!.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: { parts },
-      config: { responseMimeType: "application/json", responseSchema: ocrResponseSchema }
-    });
+  // Helper: call Gemini once with a set of parts and return full parsed response object
+  const GEMINI_TIMEOUT_MS = 50_000;
+  const callGeminiChunk = async (parts: any[]): Promise<any> => {
+    const response = await Promise.race([
+      currentClient!.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: { parts },
+        config: { responseMimeType: "application/json", responseSchema: ocrResponseSchema }
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Gemini API timed out after 50 seconds")), GEMINI_TIMEOUT_MS)
+      ),
+    ]);
     const raw = (response.text || "").trim();
+    if (!raw) throw new Error("Gemini returned an empty response");
     const parsed = JSON.parse(raw);
-    return parsed.questions || [];
+    return parsed;
   };
 
   try {
@@ -1986,41 +1993,27 @@ app.post("/api/gemini/extract-questions", createRateLimiterMiddleware("ocr", 30)
         const prompt = buildOcrPrompt(subjectHint, fileName, CHUNK_SIZE);
         const parts = [{ text: chunkText }, { text: prompt }];
         console.log(`Dispatching chunk ${idx + 1}/${chunks.length} to Gemini...`);
-        return callGeminiChunk(parts).catch(err => {
-          console.error(`Chunk ${idx + 1} failed:`, err.message);
-          return [] as any[];
-        });
+        return callGeminiChunk(parts)
+          .then((parsed) => {
+            if (idx === 0 && parsed.subject) detectedSubject = parsed.subject;
+            if (idx === 0 && parsed.year) detectedYear = parsed.year;
+            return parsed.questions || [];
+          })
+          .catch(err => {
+            console.error(`Chunk ${idx + 1} failed:`, err.message);
+            return [] as any[];
+          });
       });
 
       const chunkResults = await Promise.all(chunkPromises);
       allQuestions = chunkResults.flat();
-
-      // Try to detect subject/year from the first chunk's full response
-      if (chunks.length > 0) {
-        try {
-          const firstResponse = await currentClient!.models.generateContent({
-            model: "gemini-2.0-flash",
-            contents: { parts: [{ text: chunks[0] }, { text: buildOcrPrompt(subjectHint, fileName, CHUNK_SIZE) }] },
-            config: { responseMimeType: "application/json", responseSchema: ocrResponseSchema }
-          });
-          const firstParsed = JSON.parse((firstResponse.text || "").trim());
-          detectedSubject = firstParsed.subject || subjectHint || "Physics";
-          detectedYear = firstParsed.year || 2024;
-        } catch (_) { /* keep defaults */ }
-      }
     } else {
       // Binary path (PDF / images): send all parts in one call, no artificial limit
       const prompt = buildOcrPrompt(subjectHint, fileName, 100);
       const parts = [...rawParts, { text: prompt }];
       console.log(`Binary file: sending ${rawParts.length} part(s) to Gemini in a single call.`);
 
-      const response = await currentClient!.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: { parts },
-        config: { responseMimeType: "application/json", responseSchema: ocrResponseSchema }
-      });
-      const raw = (response.text || "").trim();
-      const parsed = JSON.parse(raw);
+      const parsed = await callGeminiChunk(parts);
       allQuestions = parsed.questions || [];
       detectedSubject = parsed.subject || subjectHint || "Physics";
       detectedYear = parsed.year || 2024;
@@ -2036,6 +2029,12 @@ app.post("/api/gemini/extract-questions", createRateLimiterMiddleware("ocr", 30)
     deduped.sort((a, b) => a.question_number - b.question_number);
 
     console.log(`Extraction complete: ${deduped.length} unique questions from "${fileName}".`);
+
+    if (deduped.length === 0) {
+      return res.status(422).json({
+        error: "The AI could not extract any questions from this file. Please try a clearer scan, a different file format, or use the offline simulation mode."
+      });
+    }
 
     return res.json({
       sheetConfidence: 95,
